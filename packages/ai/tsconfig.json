@@ -17,6 +17,7 @@
         "sourceMap": true,
         "declaration": true,
         "declarationMap": true,
+        "esModuleInterop": true,
 
         // Best practices
         "strict": true,
