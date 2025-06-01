@@ -1,5 +1,5 @@
 import { defineProvider, type ProviderContext } from '@varlabs/ai/provider';
-import fetch from '@repo/utils/fetch.server';
+import fetch from '@varlabs/ai.utils/fetch.server';
 import type { Tool } from '@varlabs/ai/utils/tool';
 import { handleStreamResponse } from '@varlabs/ai/utils/streaming';
 

@@ -1,15 +1,25 @@
 {
-  "name": "@repo/utils",
+  "name": "@varlabs/ai.utils",
   "version": "1.0.0",
   "description": "",
   "type": "module",
   "exports": {
-    "./fetch.server": "./dist/src/fetch.server.js",
-    "./fetch.client": "./dist/src/fetch.client.js"
+    "./fetch.server": "./src/fetch.server.js",
+    "./fetch.client": "./src/fetch.client.js"
   },
   "scripts": {
     "clean": "rimraf ./dist",
-    "build": "pnpm run clean && tsc"
+    "copy-files:root": "copyfiles -u 0 README.md package.json LICENSE ./dist",
+    "build": "pnpm run clean && pnpm run copy-files:root && tsc",
+    "git:main": "git checkout \"main\"",
+    "git:push:main": "git push -u origin \"main\" --tags",
+    "patch": "pnpm run git:main && npm version patch && pnpm run git:push:main",
+    "minor": "pnpm run git:main && npm version minor && pnpm run git:push:main",
+    "major": "pnpm run git:main && npm version major && pnpm run git:push:main",
+    "roll": "pnpm run build && cd dist && npm publish",
+    "roll:patch": "pnpm run patch && pnpm run roll",
+    "roll:minor": "pnpm run minor && pnpm run roll",
+    "roll:major": "pnpm run major && pnpm run roll"
   },
   "keywords": [],
   "author": "",
@@ -22,5 +32,8 @@
   },
   "dependencies": {
     "undici": "^7.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
