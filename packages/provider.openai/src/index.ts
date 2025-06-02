@@ -697,12 +697,11 @@ const openAiProvider = defineProvider({
                 Model extends TextResponseModels,
                 // biome-ignore lint/complexity/noBannedTypes: <explanation>
                 CustomTools extends CustomToolSet = {},
-                Stream extends boolean = false,
             >(
-                input: TextResponsesInput<Model, CustomTools, Stream>,
+                input: TextResponsesInput<Model, CustomTools, false>,
                 ctx: ProviderContext
-            ): Promise<CreateResponseOutput<Model, Stream>> => {
-                type RequestBody = Omit<TextResponsesInput<Model, CustomTools, Stream>, 'custom_tools' | 'built_in_tools' | 'structured_output'> & {
+            ): Promise<CreateResponseOutput<Model, false>> => {
+                type RequestBody = Omit<TextResponsesInput<Model, CustomTools, false>, 'custom_tools' | 'built_in_tools' | 'structured_output'> & {
                     tools: (
                         | FileSearchToolType
                         | WebSearchToolType
@@ -742,7 +741,7 @@ const openAiProvider = defineProvider({
                     model: input.model,
                     instructions: input.instructions,
                     input: input.input,
-                    stream: input.stream,
+                    stream: false,
                     reasoning: input.reasoning,
                     max_output_tokens: input.max_output_tokens,
                     metadata: input.metadata,
@@ -764,19 +763,6 @@ const openAiProvider = defineProvider({
                         }
                     } : undefined,
                 };
-
-                if (input.stream) {
-                    const response = await fetch<Response, false>(`${ctx.config.baseUrl}/responses`, {
-                        method: 'POST',
-                        headers: {
-                            Authorization: `Bearer ${ctx.config.apiKey}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(requestBody),
-                    }, false);
-
-                    return handleStreamResponse(response) as unknown as CreateResponseOutput<Model, Stream>;
-                }
 
                 const response = await fetch<CreateResponseOutput<Model, false>>(`${ctx.config.baseUrl}/responses`, {
                     method: 'POST',
@@ -812,7 +798,89 @@ const openAiProvider = defineProvider({
                     }
                 }
 
-                return response as CreateResponseOutput<Model, Stream>;
+                return response as CreateResponseOutput<Model, false>;
+            },
+            stream_response: async <
+                Model extends TextResponseModels,
+                // biome-ignore lint/complexity/noBannedTypes: <explanation>
+                CustomTools extends CustomToolSet = {},
+            >(
+                input: TextResponsesInput<Model, CustomTools, true>,
+                ctx: ProviderContext
+            ): Promise<CreateResponseOutput<Model, true>> => {
+                type RequestBody = Omit<TextResponsesInput<Model, CustomTools, true>, 'custom_tools' | 'built_in_tools' | 'structured_output'> & {
+                    tools: (
+                        | FileSearchToolType
+                        | WebSearchToolType
+                        | ComputerUseToolType
+                        | FunctionToolType
+                    )[];
+                    text?: {
+                        format: {
+                            type: 'json_schema';
+                            name: string;
+                            strict?: boolean;
+                            schema: OpenAiStructuredSchema;
+                        };
+                    };
+                };
+
+                const bodyToolsArray: RequestBody['tools'] = [];
+                if (input.built_in_tools) {
+                    for (const tool of input.built_in_tools) {
+                        bodyToolsArray.push(tool);
+                    }
+                }
+                if (input.custom_tools) {
+                    for (const [name, tool] of Object.entries(input.custom_tools)) {
+                        const functionTool: FunctionToolType = {
+                            type: 'function',
+                            name,
+                            strict: tool.strict ?? false,
+                            description: tool.description,
+                            parameters: JSON.stringify(tool.parameters),
+                        };
+                        bodyToolsArray.push(functionTool);
+                    }
+                }
+
+                const requestBody: RequestBody = {
+                    model: input.model,
+                    instructions: input.instructions,
+                    input: input.input,
+                    stream: true,
+                    reasoning: input.reasoning,
+                    max_output_tokens: input.max_output_tokens,
+                    metadata: input.metadata,
+                    truncation: input.truncation,
+                    user: input.user,
+                    previous_response_id: input.previous_response_id,
+                    store: input.store,
+                    parallel_tool_calls: input.parallel_tool_calls,
+                    tool_choice: input.tool_choice,
+                    temperature: input.temperature,
+                    top_p: input.top_p,
+                    tools: bodyToolsArray,
+                    text: input.structured_output ? {
+                        format: {
+                            type: 'json_schema',
+                            name: input.structured_output.name,
+                            strict: input.structured_output.strict,
+                            schema: transformToOpenAiSchema(input.structured_output.schema),
+                        }
+                    } : undefined,
+                };
+
+                const response = await fetch<Response, false>(`${ctx.config.baseUrl}/responses`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${ctx.config.apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody),
+                }, false);
+
+                return handleStreamResponse(response) as unknown as CreateResponseOutput<Model, true>;
             },
             get_response: async (id: string, ctx: ProviderContext) => {
                 const response = await fetch<TextResponseType<any, any>>(`${ctx.config.baseUrl}/responses/${id}`, {
@@ -1081,6 +1149,5 @@ const openAiProvider = defineProvider({
         },
     },
 });
-
 
 export default openAiProvider;
