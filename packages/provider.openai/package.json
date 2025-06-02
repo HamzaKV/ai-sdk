@@ -1,6 +1,6 @@
 {
     "name": "@varlabs/ai.openai",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "description": "AI sdk for interfacing with AI models",
     "author": "HamzaKV <hamzakv333@gmail.com>",
     "repository": "https://github.com/HamzaKV/ai-sdk.git",
