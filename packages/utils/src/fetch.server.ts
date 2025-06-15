@@ -28,7 +28,7 @@ const Fetch = async <T, S extends boolean = true>(
 ): Promise<FetchResponse<T, S>> => {
     // AbortController was added in node v14.17.0 globally
     const AbortController = globalThis.AbortController;
-    const maxTime = options?.MAX_FETCH_TIME ?? 4000;
+    const maxTime = options?.MAX_FETCH_TIME ?? 300000;
 
     const controller = new AbortController();
 

@@ -650,6 +650,13 @@ const transformToOpenAiSchema = (schema: StructuredSchema): OpenAiStructuredSche
     return result;
 };
 
+type FunctionInput<T> = {
+    input: T;
+    config?: {
+        fetchTimeout?: number;
+    };
+};
+
 const openAiProvider = defineProvider({
     name: 'OpenAI',
     context: {
@@ -660,8 +667,8 @@ const openAiProvider = defineProvider({
     },
     models: {
         embedding: {
-            embed: async (input: EmbedInput, ctx) => {
-                const { text, model } = input;
+            embed: async (input: FunctionInput<EmbedInput>, ctx) => {
+                const { input: { model, text }, config } = input;
 
                 type EmbeddingResponse = {
                     object: 'list';
@@ -687,6 +694,7 @@ const openAiProvider = defineProvider({
                         model,
                         input: text,
                     }),
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
@@ -698,9 +706,11 @@ const openAiProvider = defineProvider({
                 // biome-ignore lint/complexity/noBannedTypes: <explanation>
                 CustomTools extends CustomToolSet = {},
             >(
-                input: TextResponsesInput<Model, CustomTools, false>,
+                inputArgs: FunctionInput<TextResponsesInput<Model, CustomTools, false>>,
                 ctx: ProviderContext
             ): Promise<CreateResponseOutput<Model, false>> => {
+                const { input, config } = inputArgs;
+
                 type RequestBody = Omit<TextResponsesInput<Model, CustomTools, false>, 'custom_tools' | 'built_in_tools' | 'structured_output'> & {
                     tools: (
                         | FileSearchToolType
@@ -771,6 +781,7 @@ const openAiProvider = defineProvider({
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(requestBody),
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 for (const item of response.output) {
@@ -805,9 +816,11 @@ const openAiProvider = defineProvider({
                 // biome-ignore lint/complexity/noBannedTypes: <explanation>
                 CustomTools extends CustomToolSet = {},
             >(
-                input: TextResponsesInput<Model, CustomTools, true>,
+                inputArgs: FunctionInput<TextResponsesInput<Model, CustomTools, true>>,
                 ctx: ProviderContext
             ): Promise<CreateResponseOutput<Model, true>> => {
+                const { input, config } = inputArgs;
+
                 type RequestBody = Omit<TextResponsesInput<Model, CustomTools, true>, 'custom_tools' | 'built_in_tools' | 'structured_output'> & {
                     tools: (
                         | FileSearchToolType
@@ -878,22 +891,28 @@ const openAiProvider = defineProvider({
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(requestBody),
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 }, false);
 
                 return handleStreamResponse(response) as unknown as CreateResponseOutput<Model, true>;
             },
-            get_response: async (id: string, ctx: ProviderContext) => {
+            get_response: async (input: FunctionInput<{ id: string; }>, ctx: ProviderContext) => {
+                const { input: { id }, config } = input;
+                
                 const response = await fetch<TextResponseType<any, any>>(`${ctx.config.baseUrl}/responses/${id}`, {
                     method: 'GET',
                     headers: {
                         Authorization: `Bearer ${ctx.config.apiKey}`,
                         'Content-Type': 'application/json',
                     },
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
             },
-            delete_response: async (id: string, ctx: ProviderContext) => {
+            delete_response: async (input: FunctionInput<{ id: string; }>, ctx: ProviderContext) => {
+                const { input: { id }, config } = input;
+
                 type DeleteResponse = {
                     id: string;
                     object: 'response';
@@ -906,11 +925,14 @@ const openAiProvider = defineProvider({
                         Authorization: `Bearer ${ctx.config.apiKey}`,
                         'Content-Type': 'application/json',
                     },
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
             },
-            list_input_item_list: async (id: string, ctx: ProviderContext) => {
+            list_input_item_list: async (input: FunctionInput<{ id: string; }>, ctx: ProviderContext) => {
+                const { input: { id }, config } = input;
+
                 type ListInputItemResponse = {
                     object: 'list';
                     data: (InputMessage | TextResponseOutput<undefined>)[];
@@ -925,13 +947,16 @@ const openAiProvider = defineProvider({
                         Authorization: `Bearer ${ctx.config.apiKey}`,
                         'Content-Type': 'application/json',
                     },
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
             },
         },
         images: {
-            create: async <Model extends ImageGenerationModels>(input: ImageCreateInput<Model>, ctx: ProviderContext) => {
+            create: async <Model extends ImageGenerationModels>(inputArgs: FunctionInput<ImageCreateInput<Model>>, ctx: ProviderContext) => {
+                const { input, config } = inputArgs;
+                
                 type ResponseFormat = Model extends 'gpt-image-1' ? 'b64_json' : Exclude<ImageCreateInput<Model>['response_format'], undefined>;
                 const response = await fetch<ImageResponse<Model, ResponseFormat>>(`${ctx.config.baseUrl}/images/generations`, {
                     method: 'POST',
@@ -940,11 +965,14 @@ const openAiProvider = defineProvider({
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(input),
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
             },
-            edit: async <Model extends Exclude<ImageGenerationModels, 'dall-e-3'>>(input: ImageEditInput<Model>, ctx: ProviderContext) => {
+            edit: async <Model extends Exclude<ImageGenerationModels, 'dall-e-3'>>(inputArgs: FunctionInput<ImageEditInput<Model>>, ctx: ProviderContext) => {
+                const { input, config } = inputArgs;
+
                 const formData = new FormData();
                 if (Array.isArray(input.image)) {
                     for (const image of input.image) {
@@ -983,11 +1011,14 @@ const openAiProvider = defineProvider({
                         Authorization: `Bearer ${ctx.config.apiKey}`,
                     },
                     body: formData,
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
             },
-            generate_variations: async (input: ImageVariationInput, ctx) => {
+            generate_variations: async (inputArgs: FunctionInput<ImageVariationInput>, ctx) => {
+                const { input, config } = inputArgs;
+
                 const formData = new FormData();
                 // @ts-ignore
                 formData.append('image', input.image);
@@ -1008,13 +1039,16 @@ const openAiProvider = defineProvider({
                         Authorization: `Bearer ${ctx.config.apiKey}`,
                     },
                     body: formData,
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;
             },
         },
         speech: {
-            generate_audio: async (input: GenAudioInput, ctx) => {
+            generate_audio: async (inputArgs: FunctionInput<GenAudioInput>, ctx) => {
+                const { input, config } = inputArgs;
+
                 const contentTypeMap = {
                     'mp3': 'audio/mpeg',
                     'opus': 'audio/ogg',
@@ -1029,6 +1063,7 @@ const openAiProvider = defineProvider({
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(input),
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 }, false);
 
                 const blob = await response.blob();
@@ -1038,7 +1073,9 @@ const openAiProvider = defineProvider({
                     contentType: contentTypeMap[input.response_format ?? 'mp3'] as typeof contentTypeMap[keyof typeof contentTypeMap],
                 };
             },
-            transcribe_audio: async <ResponseFormat extends TranscribeAudioInputResponseFormat = 'json'>(input: TranscribeAudioInput<ResponseFormat>, ctx: ProviderContext) => {
+            transcribe_audio: async <ResponseFormat extends TranscribeAudioInputResponseFormat = 'json'>(inputArgs: FunctionInput<TranscribeAudioInput<ResponseFormat>>, ctx: ProviderContext) => {
+                const { input, config } = inputArgs;
+
                 const formData = new FormData();
                 // @ts-ignore
                 formData.append('file', input.file);
@@ -1109,6 +1146,7 @@ const openAiProvider = defineProvider({
                         'Content-Type': 'multipart/form-data',
                     },
                     body: formData,
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 }, fetchResponseFormat);
 
                 if (fetchResponseFormat) {
@@ -1118,7 +1156,9 @@ const openAiProvider = defineProvider({
                 const blob = await (response as Response).blob();
                 return blob;
             },
-            translate_audio: async (input: TranslationAudioInput, ctx) => {
+            translate_audio: async (inputArgs: FunctionInput<TranslationAudioInput>, ctx) => {
+                const { input, config } = inputArgs;
+
                 const formData = new FormData();
                 // @ts-ignore
                 formData.append('file', input.file);
@@ -1142,6 +1182,7 @@ const openAiProvider = defineProvider({
                         'Content-Type': 'multipart/form-data',
                     },
                     body: formData,
+                    MAX_FETCH_TIME: config?.fetchTimeout,
                 });
 
                 return response;

@@ -1,4 +1,4 @@
-# @varlabs/provider.openai
+# @varlabs/ai.openai
 
 A comprehensive, type-safe OpenAI provider for the @varlabs/ai SDK.
 
@@ -23,7 +23,15 @@ A comprehensive, type-safe OpenAI provider for the @varlabs/ai SDK.
 ## Installation
 
 ```bash
-npm install @varlabs/provider.openai
+npm install @varlabs/ai.openai
+
+# or
+
+yarn add @varlabs/ai.openai
+
+# or
+
+pnpm add @varlabs/ai.openai
 ```
 
 ## Usage
@@ -32,7 +40,7 @@ npm install @varlabs/provider.openai
 
 ```typescript
 import { createAIClient } from '@varlabs/ai';
-import openAiProvider from '@varlabs/provider.openai';
+import openAiProvider from '@varlabs/ai.openai';
 
 const client = createAIClient({
   providers: {
