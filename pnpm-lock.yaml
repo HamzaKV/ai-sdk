@@ -30,8 +30,8 @@ importers:
   packages/provider.openai:
     dependencies:
       '@varlabs/ai':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.2
+        version: 0.1.2
       '@varlabs/ai.utils':
         specifier: ^1.0.0
         version: 1.0.0
@@ -410,8 +410,8 @@ packages:
   '@varlabs/ai.utils@1.0.0':
     resolution: {integrity: sha512-QwD3H8tYjqWibsJPVCLHcSU0i5UII14CWxg96gPPaL2dIehEp3HoQQvOweFCl1vrtiS5PfKgH8bOEqh52LAN7Q==}
 
-  '@varlabs/ai@0.1.1':
-    resolution: {integrity: sha512-jqMRrJPjxG/+Z3WUxjeCkeez9vxLc0UMFj+vHP4BG5GA96BkBhdw91CsQxaW1+c8JWiWX7icHv2ZX3GqHzLQSg==}
+  '@varlabs/ai@0.1.2':
+    resolution: {integrity: sha512-vXdZHWfRIVKd3U2kxJw16b5ENlSq1Cee5ODjUuj7AIy0ZepeaXDQd849k1KnFfwK8YVbYBXyvvsKdfHXq08cDg==}
 
   '@varlabs/monorun@0.1.4':
     resolution: {integrity: sha512-lWaC/5/1N5140Kh8kyuiXWhK2JPJPLNTcKPttsqDC2vBSynVNVmrb0xCo5ES+UaOKdcnerO/fbiKChw+6/2tPQ==}
@@ -1399,7 +1399,7 @@ snapshots:
     dependencies:
       undici: 7.9.0
 
-  '@varlabs/ai@0.1.1': {}
+  '@varlabs/ai@0.1.2': {}
 
   '@varlabs/monorun@0.1.4':
     dependencies:

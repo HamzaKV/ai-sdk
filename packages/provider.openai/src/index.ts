@@ -818,7 +818,7 @@ const openAiProvider = defineProvider({
             >(
                 inputArgs: FunctionInput<TextResponsesInput<Model, CustomTools, true>>,
                 ctx: ProviderContext
-            ): Promise<CreateResponseOutput<Model, true>> => {
+            ) => {
                 const { input, config } = inputArgs;
 
                 type RequestBody = Omit<TextResponsesInput<Model, CustomTools, true>, 'custom_tools' | 'built_in_tools' | 'structured_output'> & {
@@ -894,7 +894,7 @@ const openAiProvider = defineProvider({
                     MAX_FETCH_TIME: config?.fetchTimeout,
                 }, false);
 
-                return handleStreamResponse(response) as unknown as CreateResponseOutput<Model, true>;
+                return handleStreamResponse<CreateResponseOutput<Model, true>>(response);
             },
             get_response: async (input: FunctionInput<{ id: string; }>, ctx: ProviderContext) => {
                 const { input: { id }, config } = input;
