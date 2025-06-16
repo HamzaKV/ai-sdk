@@ -1,45 +1,47 @@
-export async function* handleStreamResponse(
+export async function* handleStreamResponse<T>(
     res: Response,
     options?: {
         decoder?: TextDecoder
         onRawChunk?: (chunk: string) => void
         abortSignal?: AbortSignal
         prefix?: string // e.g., 'data:' or custom SSE prefix
-        isSSE?: boolean // if false, treat chunks as raw lines or JSON per line
     }
-): AsyncGenerator<Record<string, any>, void, unknown> {
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('Missing response body')
+) {
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('Missing response body');
 
-    const decoder = options?.decoder ?? new TextDecoder()
-    const prefix = options?.prefix ?? 'data:'
-    const isSSE = options?.isSSE ?? true
-    let buffer = ''
+    const decoder = options?.decoder ?? new TextDecoder();
+    const prefix = options?.prefix ?? 'data:';
+    let buffer = '';
 
     while (true) {
-        if (options?.abortSignal?.aborted) throw new Error('Stream aborted')
+        if (options?.abortSignal?.aborted) throw new Error('Stream aborted');
 
-        const { done, value } = await reader.read()
-        if (done) break
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-        options?.onRawChunk?.(chunk)
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        options?.onRawChunk?.(chunk);
 
-        const parts = buffer.split(isSSE ? '\n\n' : '\n')
-        buffer = parts.pop() ?? ''
+        const parts = buffer.split('\n');
+        buffer = parts.pop() ?? '';
 
         for (const part of parts) {
-            const line = part.trim()
-            if (isSSE && !line.startsWith(prefix)) continue
+            const line = part.trim();
+            // Skip empty lines or those that don't start with the prefix
+            if (!line || !line.startsWith(prefix)) continue;
 
-            const payload = isSSE ? line.replace(new RegExp(`^${prefix}\s*`), '') : line
-            if (payload === '[DONE]') return
+            const payload = line.replace(new RegExp(`^${prefix}\s*`), '');
+            if (payload === '[DONE]') return;
 
             try {
-                yield JSON.parse(payload)
+                const trimmedPayload = payload.trim();
+                if (!trimmedPayload) continue;
+                const parsed = JSON.parse(trimmedPayload);
+                yield parsed as T;
             } catch (err) {
-                console.warn('Malformed JSON chunk:', payload)
+                console.warn('Malformed JSON chunk:', payload);
             }
         }
     }
