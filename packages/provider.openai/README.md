@@ -68,17 +68,16 @@ const image = await client.openai.images.create({
 // Audio transcription
 const transcription = await client.openai.speech.transcribe_audio({
   model: 'whisper-1',
-  file: audioFile
+  file: audioFile //blob or file object
 });
 ```
 
 ### Streaming Responses
 
 ```typescript
-const stream = await client.openai.text.create_response({
+const stream = await client.openai.text.stream_response({
   model: 'gpt-4o',
   input: 'Write a short story about AI.',
-  stream: true
 });
 
 // Handle the stream
@@ -91,6 +90,8 @@ for await (const chunk of stream) {
 ### Using Custom Tools
 
 ```typescript
+import { customTool } from '@varlabs/ai.openai';
+
 const response = await client.openai.text.create_response({
   model: 'gpt-4o',
   input: 'What\'s the weather in New York?',
@@ -125,9 +126,8 @@ const response = await client.openai.text.create_response({
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Full name of the person' },
-        age: { type: 'number', description: 'Age in years' }
+        age: { type: 'number', description: 'Age in years', required: false }
       },
-      required: true
     }
   }
 });

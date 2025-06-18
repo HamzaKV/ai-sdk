@@ -99,15 +99,68 @@ type FunctionToolType = {
     strict: boolean;
     name: string;
     description?: string;
-    parameters: string;
+    parameters: ToolParameters;
 };
 
-type CustomTool<TParams = any, TResult = any> = Omit<Tool<TParams, TResult>, 'name'> & {
+type ToolParameterBase = {
+    type: 'string' | 'number' | 'boolean';
+    description?: string;
+    required?: boolean;
+};
+
+type ToolParameterArray = {
+    type: 'array';
+    items: (ToolParameterBase | ToolParameterObject | ToolParameterArray)[];
+    description?: string;
+    required?: boolean;
+};
+
+type ToolParameterObject = {
+    type: 'object'
+    properties: Record<string, ToolParameterObject | ToolParameterBase | ToolParameterArray>;
+    description?: string;
+    required?: boolean;
+};
+
+type ToolParameters = {
+    type: 'object';
+    properties: Record<string, ToolParameterObject | ToolParameterBase | ToolParameterArray>;
+    additionalProperties?: boolean;
+};
+
+type InferParameter<T> = 
+    T extends { type: 'string' } ? string :
+    T extends { type: 'number' } ? number :
+    T extends { type: 'boolean' } ? boolean :
+    T extends { type: 'array', items: infer Items } ? InferArray<Items> :
+    T extends { type: 'object', properties: infer Properties }
+        ? Properties extends Record<string, any> 
+            ? InferObject<Properties>
+            : never
+        : never;
+
+type InferArray<T> = T extends (infer U)[] ? InferParameter<U>[] : never;
+
+type InferObject<T extends Record<string, any>> = {
+    [K in keyof T as T[K]['required'] extends true ? K : never]: InferParameter<T[K]>;
+} & {
+    [K in keyof T as T[K]['required'] extends true ? never : K]?: InferParameter<T[K]>;
+};
+
+// Final inference type
+type InferToolParameters<T extends ToolParameters> = T extends { properties: infer Props }
+    ? Props extends Record<string, any>
+        ? InferObject<Props>
+        : never
+    : never;
+
+type CustomTool<TParams extends ToolParameters = any, TResult = any> = Omit<Tool<TParams, TResult>, 'name' | 'execute'> & {
     strict?: boolean;
+    execute: (args: InferToolParameters<TParams>) => Promise<TResult>;
 };
 
 export const customTool = <
-    TParams,
+    TParams extends ToolParameters,
     TResult = any
 >(
     tool: CustomTool<TParams, TResult>
@@ -253,24 +306,30 @@ type TextResponseOutput<
     result?: any;
 };
 
-type StructuredSchemaObjectType = {
-    type: 'object';
-    properties: Record<string, StructuredSchema>;
-    additionalProperties?: boolean;
+type StructuredSchemaBaseType = {
+    type: 'string' | 'number' | 'boolean';
 };
 
-type StructuredSchema = {
+type StructuredSchemaObjectType = {
+    type: 'object';
+    properties: Record<string, StructuredSchemaEnhancedType>;
+};
+
+type StructuredSchemaArrayType = {
+    type: 'array';
+    items: StructuredSchemaEnhancedType[];
+};
+
+type StructuredSchemaEnhancedType = {
     description?: string;
     required?: boolean;
-} &
-    ({
-        type: 'string' | 'number' | 'boolean';
-    }
-        | StructuredSchemaObjectType
-        | {
-            type: 'array';
-            items: StructuredSchema;
-        });
+} & (StructuredSchemaBaseType | StructuredSchemaObjectType | StructuredSchemaArrayType);
+
+type StructuredSchema = {
+    type: 'object';
+    description?: string;
+    properties: Record<string, StructuredSchemaEnhancedType>;
+};
 
 type TextResponsesInput<
     Model extends TextResponseModels,
@@ -281,7 +340,7 @@ type TextResponsesInput<
     model: Model;
     instructions?: string;
     input: | string
-        | (InputMessage
+    | (InputMessage
         | {
             type: 'item_reference';
             id: string;
@@ -472,7 +531,7 @@ type StreamResponse<Model extends TextResponseModels> =
 
 type CreateResponseOutput<Model extends TextResponseModels, Stream extends boolean = false> = Stream extends true
     ? StreamResponse<Model>
-    : TextResponseType<Model,TextResponsesInput<Model>>;
+    : TextResponseType<Model, TextResponsesInput<Model>>;
 
 type BlobLike = {
     readonly size: number;
@@ -552,10 +611,11 @@ type ImageResponse<
 };
 
 type OpenAiStructuredSchema = Exclude<Omit<StructuredSchema, 'required'>, StructuredSchemaObjectType> | {
-    type: 'object';
+    type: any;
     properties: Record<string, OpenAiStructuredSchema>;
-    additionalProperties?: boolean;
-    required?: string[];
+    description?: string;
+    additionalProperties: boolean;
+    required: string[];
 };
 
 type GenAudioInput = {
@@ -599,56 +659,76 @@ type TranslationAudioInput = {
  * Moving individual 'required' flags to a single 'required' array on objects
  */
 const transformToOpenAiSchema = (schema: StructuredSchema): OpenAiStructuredSchema => {
-    // Fast path for primitive types
-    if (schema.type === 'string' || schema.type === 'number' || schema.type === 'boolean') {
-        // Use destructuring with rest pattern to avoid object spread
-        const { required, ...result } = schema;
-        return result as OpenAiStructuredSchema;
-    }
-
-    // Fast path for array types
-    if (schema.type === 'array') {
-        const { required, ...rest } = schema;
-        // Transform items without creating unnecessary intermediate objects
-        return {
-            ...rest,
-            items: transformToOpenAiSchema(schema.items)
-        } as OpenAiStructuredSchema;
-    }
-
-    // Handle object type - we know it's an object if we got here
-    // @ts-expect-error
-    const { required: _, properties, ...rest } = schema;
-    const requiredProps: string[] = [];
-    const transformedProps: Record<string, OpenAiStructuredSchema> = {};
-
-    // Use for-in for performance with objects (slightly faster than Object.entries)
-    for (const propName in properties) {
-        const propSchema = properties[propName];
-
-        // Check required flag and add to array if needed
-        if (propSchema.required) {
-            requiredProps.push(propName);
-        }
-
-        // Transform property schema
-        transformedProps[propName] = transformToOpenAiSchema(propSchema);
-    }
-
-    // Create result with conditionally added required array
+    // Handle the root object
     const result: OpenAiStructuredSchema = {
-        ...rest,
         type: 'object',
-        properties: transformedProps
+        properties: {},
+        additionalProperties: false,
+        required: [],
+        description: schema.description,
     };
 
-    // Only add the required array if it contains elements
-    if (requiredProps.length > 0) {
-        result.required = requiredProps;
+    // Process all properties
+    for (const propName in schema.properties) {
+        const property = schema.properties[propName];
+        result.properties[propName] = transformProperty(property);
+
+        if (property.required === false) {
+            result.properties[propName].type = [result.properties[propName].type, 'null']; // Allow null if not required
+        }
+        result.required.push(propName);
     }
 
     return result;
 };
+
+/**
+ * Helper function to transform individual property schemas
+ */
+function transformProperty(property: StructuredSchemaEnhancedType): OpenAiStructuredSchema {
+    // Copy basic properties but exclude 'required' flag
+    const { required, ...baseProperty } = property;
+    
+    // Handle primitive types directly
+    if (property.type === 'string' || property.type === 'number' || property.type === 'boolean') {
+        return baseProperty as unknown as OpenAiStructuredSchema;
+    }
+    
+    // Handle arrays
+    if (property.type === 'array') {
+        return {
+            ...baseProperty,
+            items: property.items.map(item => transformProperty(item))
+        } as unknown as OpenAiStructuredSchema;
+    }
+    
+    // Handle objects
+    if (property.type === 'object') {
+        const result: OpenAiStructuredSchema = {
+            type: 'object',
+            description: property.description,
+            properties: {},
+            additionalProperties: false,
+            required: []
+        };
+        
+        // Process nested properties
+        for (const propName in property.properties) {
+            const nestedProp = property.properties[propName];
+            result.properties[propName] = transformProperty(nestedProp);
+            
+            if (property.required === false) {
+                result.properties[propName].type = [result.properties[propName].type, 'null']; // Allow null if not required
+            }
+            result.required.push(propName);
+        }
+        
+        return result;
+    }
+    
+    // Default case, shouldn't get here if types are properly constrained
+    return baseProperty as unknown as OpenAiStructuredSchema;
+}
 
 type FunctionInput<T> = {
     input: T;
@@ -741,7 +821,7 @@ const openAiProvider = defineProvider({
                             name,
                             strict: tool.strict ?? false,
                             description: tool.description,
-                            parameters: JSON.stringify(tool.parameters),
+                            parameters: tool.parameters,
                         };
                         bodyToolsArray.push(functionTool);
                     }
@@ -786,12 +866,14 @@ const openAiProvider = defineProvider({
 
                 for (const item of response.output) {
                     if (item.type === 'function_call') {
-                        const tool = input.custom_tools?.[item.name];
+                        const tool = input.custom_tools?.[item.name] as CustomTool | undefined;
 
                         if (tool) {
                             const args = JSON.parse(item.arguments);
-                            const toolResponse = await tool.execute(args);
-                            item.result = toolResponse;
+                            type ToolParameters = InferToolParameters<typeof tool.parameters>;
+                            type ToolResponse = Awaited<ReturnType<typeof tool.execute>>;
+                            const toolResponse = await tool.execute(args as ToolParameters);
+                            item.result = toolResponse as ToolResponse;
                         }
                     }
 
@@ -801,7 +883,7 @@ const openAiProvider = defineProvider({
                                 try {
                                     const result = JSON.parse(content.text);
                                     content.structured_output = result;
-                                } catch  {
+                                } catch {
                                     // If parsing fails, we can just leave it as is
                                 }
                             }
@@ -851,7 +933,7 @@ const openAiProvider = defineProvider({
                             name,
                             strict: tool.strict ?? false,
                             description: tool.description,
-                            parameters: JSON.stringify(tool.parameters),
+                            parameters: tool.parameters,
                         };
                         bodyToolsArray.push(functionTool);
                     }
@@ -898,7 +980,7 @@ const openAiProvider = defineProvider({
             },
             get_response: async (input: FunctionInput<{ id: string; }>, ctx: ProviderContext) => {
                 const { input: { id }, config } = input;
-                
+
                 const response = await fetch<TextResponseType<any, any>>(`${ctx.config.baseUrl}/responses/${id}`, {
                     method: 'GET',
                     headers: {
@@ -956,7 +1038,7 @@ const openAiProvider = defineProvider({
         images: {
             create: async <Model extends ImageGenerationModels>(inputArgs: FunctionInput<ImageCreateInput<Model>>, ctx: ProviderContext) => {
                 const { input, config } = inputArgs;
-                
+
                 type ResponseFormat = Model extends 'gpt-image-1' ? 'b64_json' : Exclude<ImageCreateInput<Model>['response_format'], undefined>;
                 const response = await fetch<ImageResponse<Model, ResponseFormat>>(`${ctx.config.baseUrl}/images/generations`, {
                     method: 'POST',
@@ -1133,10 +1215,10 @@ const openAiProvider = defineProvider({
                     };
                 };
                 type FetchResponse = ResponseFormat extends 'json'
-                        ? JSONTranscriptionResponse
-                        : ResponseFormat extends 'verbose_json'
-                            ? VerboseJSONTranscriptionResponse
-                            : Response;
+                    ? JSONTranscriptionResponse
+                    : ResponseFormat extends 'verbose_json'
+                    ? VerboseJSONTranscriptionResponse
+                    : Response;
                 type FetchResponseFormat = ResponseFormat extends 'json' | 'verbose_json' ? false : true;
                 const fetchResponseFormat = (input.response_format === 'json' || input.response_format === 'verbose_json') as FetchResponseFormat;
                 const response = await fetch<FetchResponse, FetchResponseFormat>(`${ctx.config.baseUrl}/audio/transcriptions`, {
@@ -1151,7 +1233,7 @@ const openAiProvider = defineProvider({
 
                 if (fetchResponseFormat) {
                     return input.response_format === 'json' ? response as JSONTranscriptionResponse : response as VerboseJSONTranscriptionResponse;
-                } 
+                }
 
                 const blob = await (response as Response).blob();
                 return blob;
