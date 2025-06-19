@@ -27,6 +27,28 @@ importers:
         specifier: ^5.8.3
         version: 5.8.3
 
+  packages/provider.anthropic:
+    dependencies:
+      '@varlabs/ai':
+        specifier: ^0.1.2
+        version: 0.1.2
+      '@varlabs/ai.utils':
+        specifier: ^1.0.2
+        version: 1.0.2
+    devDependencies:
+      copyfiles:
+        specifier: ^2.4.1
+        version: 2.4.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+      vitest:
+        specifier: ^3.1.4
+        version: 3.1.4(@types/node@22.15.21)
+
   packages/provider.openai:
     dependencies:
       '@varlabs/ai':

@@ -90,16 +90,16 @@ const logger = async (ctx) => {
 ### Utilities
 
 - **Cosine Similarity**  
-  [`cosineSimilarity`](./src/utils/cosine.ts): Compare vector similarity.
+  [`cosineSimilarity`](./packages/ai/src/utils/cosine.ts): Compare vector similarity.
 
 - **Streaming**  
-  [`handleStreamResponse`](./src/utils/streaming.ts): Parse streaming AI responses (SSE, JSON lines, etc.).  
-  [`createDataStream`](./src/utils/streaming.ts): Create a readable stream for streaming data.  
-  [`pipeStreamToResponse`](./src/utils/streaming.ts): Pipe a stream to Node.js or Web Response objects.
+  [`handleStreamResponse`](./packages/ai/src/utils/streaming.ts): Parse streaming AI responses (SSE, JSON lines, etc.).  
+  [`createDataStream`](./packages/ai/src/utils/streaming.ts): Create a readable stream for streaming data.  
+  [`pipeStreamToResponse`](./packages/ai/src/utils/streaming.ts): Pipe a stream to Node.js or Web Response objects.
 
 - **Structure & Tooling**  
-  [`defineStructure`](./src/utils/structure.ts): Type-safe schema definition.  
-  [`defineTool`](./src/utils/tool.ts): Standardize tool/external function definitions.
+  [`defineStructure`](./packages/ai/src/utils/structure.ts): Type-safe schema definition.  
+  [`defineTool`](./packages/ai/src/utils/tool.ts): Standardize tool/external function definitions.
 
 ---
 
@@ -140,14 +140,14 @@ const providerInstance = someProvider({ config: { apiKey: '...' } });
 
 ## API Reference
 
-- [`defineProvider`](./src/provider.ts) – Create a provider with models and context.
-- [`createAIClient`](./src/index.ts) – Compose providers and middleware into a unified client.
-- [`cosineSimilarity`](./src/utils/cosine.ts) – Vector similarity.
-- [`handleStreamResponse`](./src/utils/streaming.ts) – Streaming response parser.
-- [`createDataStream`](./src/utils/streaming.ts) – Streaming data generator.
-- [`pipeStreamToResponse`](./src/utils/streaming.ts) – Pipe streams to responses.
-- [`defineStructure`](./src/utils/structure.ts) – Schema definition.
-- [`defineTool`](./src/utils/tool.ts) – Tool definition.
+- [`defineProvider`](./packages/ai/src/provider.ts) – Create a provider with models and context.
+- [`createAIClient`](./packages/ai/src/index.ts) – Compose providers and middleware into a unified client.
+- [`cosineSimilarity`](./packages/ai/src/utils/cosine.ts) – Vector similarity.
+- [`handleStreamResponse`](./packages/ai/src/utils/streaming.ts) – Streaming response parser.
+- [`createDataStream`](./packages/ai/src/utils/streaming.ts) – Streaming data generator.
+- [`pipeStreamToResponse`](./packages/ai/src/utils/streaming.ts) – Pipe streams to responses.
+- [`defineStructure`](./packages/ai/src/utils/structure.ts) – Schema definition.
+- [`defineTool`](./packages/ai/src/utils/tool.ts) – Tool definition.
 
 ---
 

@@ -1,0 +1,54 @@
+{
+    "name": "@varlabs/ai.anthropic",
+    "version": "0.1.0",
+    "description": "AI sdk for interfacing with AI models",
+    "author": "HamzaKV <hamzakv333@gmail.com>",
+    "repository": "https://github.com/HamzaKV/ai-sdk.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.js"
+    },
+    "scripts": {
+        "clean": "rimraf ./dist",
+        "copy-files:root": "copyfiles -u 0 README.md package.json LICENSE ./dist",
+        "build": "pnpm run clean && tsc && pnpm run copy-files:root",
+        "test": "vitest",
+        "git:main": "git checkout \"main\"",
+        "git:push:main": "git push -u origin \"main\" --tags",
+        "patch": "pnpm run git:main && npm version patch && pnpm run git:push:main",
+        "minor": "pnpm run git:main && npm version minor && pnpm run git:push:main",
+        "major": "pnpm run git:main && npm version major && pnpm run git:push:main",
+        "roll": "pnpm run build && cd dist && npm publish",
+        "roll:patch": "pnpm run patch && pnpm run roll",
+        "roll:minor": "pnpm run minor && pnpm run roll",
+        "roll:major": "pnpm run major && pnpm run roll"
+    },
+    "packageManager": "pnpm@10.6.2",
+    "devDependencies": {
+        "copyfiles": "^2.4.1",
+        "rimraf": "^6.0.1",
+        "typescript": "^5.8.3",
+        "vitest": "^3.1.4"
+    },
+    "dependencies": {
+        "@varlabs/ai": "^0.1.2",
+        "@varlabs/ai.utils": "^1.0.2"
+    },
+    "keywords": [
+        "ai",
+        "sdk",
+        "typescript",
+        "anthropic",
+        "provider",
+        "llm",
+        "chatgpt",
+        "gpt",
+        "anthropic-api",
+        "anthropic-provider",
+        "anthropic-sdk"
+    ],
+    "publishConfig": {
+        "access": "public"
+    }
+}
