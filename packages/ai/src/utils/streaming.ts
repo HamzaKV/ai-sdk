@@ -1,3 +1,28 @@
+// Shared stream protocol every provider normalizes its own wire format into,
+// so downstream consumers (ui.core, signatures) never see provider-specific shapes.
+export type StreamEvent =
+    | { type: 'text-delta'; delta: string }
+    | { type: 'client-tool-call'; toolCallId: string; name: string; args: unknown }
+    | { type: 'hitl-pending'; jobId: string; toolCallId: string; name: string; args: unknown }
+    | { type: 'error'; message: string }
+    | { type: 'done' };
+
+// Wraps a provider's raw parsed stream, mapping each raw chunk into the shared StreamEvent protocol.
+export async function* mapToStreamEvents<T>(
+    source: AsyncGenerator<T>,
+    mapper: (chunk: T) => StreamEvent | StreamEvent[] | undefined
+): AsyncGenerator<StreamEvent> {
+    for await (const chunk of source) {
+        const mapped = mapper(chunk);
+        if (!mapped) continue;
+        if (Array.isArray(mapped)) {
+            yield* mapped;
+        } else {
+            yield mapped;
+        }
+    }
+}
+
 export async function* handleStreamResponse<T>(
     res: Response,
     options?: {

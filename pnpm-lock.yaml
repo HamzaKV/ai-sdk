@@ -30,11 +30,11 @@ importers:
   packages/provider.anthropic:
     dependencies:
       '@varlabs/ai':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: workspace:*
+        version: link:../ai
       '@varlabs/ai.utils':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       copyfiles:
         specifier: ^2.4.1
@@ -52,11 +52,11 @@ importers:
   packages/provider.openai:
     dependencies:
       '@varlabs/ai':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: workspace:*
+        version: link:../ai
       '@varlabs/ai.utils':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       copyfiles:
         specifier: ^2.4.1
@@ -428,12 +428,6 @@ packages:
 
   '@types/node@22.15.21':
     resolution: {integrity: sha512-EV/37Td6c+MgKAbkcLG6vqZ2zEYHD7bvSrzqqs2RIhbA6w3x+Dqz8MZM3sP6kGTeLrdoOgKZe+Xja7tUB2DNkQ==}
-
-  '@varlabs/ai.utils@1.0.2':
-    resolution: {integrity: sha512-0IwKYV2HXn8uG/WHJb4W9Ryz5dxpRxIXylgqZZ0v64YTk9TSqW82CeNN3NLS60iyQH9ipEWULvDDJwEG++/niQ==}
-
-  '@varlabs/ai@0.1.2':
-    resolution: {integrity: sha512-vXdZHWfRIVKd3U2kxJw16b5ENlSq1Cee5ODjUuj7AIy0ZepeaXDQd849k1KnFfwK8YVbYBXyvvsKdfHXq08cDg==}
 
   '@varlabs/monorun@0.1.4':
     resolution: {integrity: sha512-lWaC/5/1N5140Kh8kyuiXWhK2JPJPLNTcKPttsqDC2vBSynVNVmrb0xCo5ES+UaOKdcnerO/fbiKChw+6/2tPQ==}
@@ -1416,12 +1410,6 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
     optional: true
-
-  '@varlabs/ai.utils@1.0.2':
-    dependencies:
-      undici: 6.21.3
-
-  '@varlabs/ai@0.1.2': {}
 
   '@varlabs/monorun@0.1.4':
     dependencies:

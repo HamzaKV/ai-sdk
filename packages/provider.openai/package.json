@@ -32,8 +32,8 @@
         "vitest": "^3.1.4"
     },
     "dependencies": {
-        "@varlabs/ai": "^0.1.2",
-        "@varlabs/ai.utils": "^1.0.2"
+        "@varlabs/ai": "workspace:*",
+        "@varlabs/ai.utils": "workspace:*"
     },
     "keywords": [
         "ai",

@@ -119,21 +119,19 @@ type InferToolParameters<T extends ToolParameters> = T extends { properties: inf
         : never
     : never;
 
-type CustomTool<TParams extends ToolParameters = any, TResult = any> = {
+type CustomToolBase<TParams extends ToolParameters> = {
     name: string;
     type: 'custom';
     description?: string;
     cache_control?: CacheControl;
     input_schema: TParams;
-    execute: (args: InferToolParameters<TParams>) => Promise<TResult>;
 };
 
-export const customTool = <
-    TParams extends ToolParameters,
-    TResult = any
->(
-    tool: CustomTool<TParams, TResult>
-) => {
+type CustomTool<TParams extends ToolParameters = any, TResult = any> =
+    | (CustomToolBase<TParams> & { location: 'server'; execute: (args: InferToolParameters<TParams>) => Promise<TResult> })
+    | (CustomToolBase<TParams> & { location: 'client' });
+
+export const customTool = <T extends CustomTool<any, any>>(tool: T): T => {
     return tool;
 };
 
@@ -227,8 +225,7 @@ type ImageContent = {
     };
 };
 
-type FunctionInput = { 
-    input: {
+type AnthropicMessagesInput = {
         model: Model;
         messages: {
             role: 'user' | 'assistant';
@@ -426,13 +423,9 @@ type FunctionInput = {
         | {
             type: 'none';
         };
-        tools?: Tool[];
-        top_k?: number;
-        top_p?: number;
-    }; 
-    config?: {
-        fetchTimeout?: number;
-    } 
+    tools?: Tool[];
+    top_k?: number;
+    top_p?: number;
 };
 
 type AnthropicResponse = {
@@ -563,6 +556,13 @@ type AnthropicResponse = {
     )[];
 };
 
+type AnthropicConfig = {
+    apiKey: string;
+    baseUrl: string;
+    apiVersion: string;
+    fetchTimeout?: number;
+};
+
 const anthropicProvider = defineProvider({
     name: 'anthropic',
     context: {
@@ -570,12 +570,12 @@ const anthropicProvider = defineProvider({
             apiKey: '',
             baseUrl: 'https://api.anthropic.com/v1',
             apiVersion: '2023-06-01',
-        },
+        } as AnthropicConfig,
     },
     models: {
         claude: {
-            messages: async (input: FunctionInput, ctx) => {
-                const { apiKey, baseUrl, apiVersion } = ctx.config;
+            messages: async (input: AnthropicMessagesInput, ctx: ProviderContext<AnthropicConfig>) => {
+                const { apiKey, baseUrl, apiVersion, fetchTimeout } = ctx.config;
 
                 const request = await fetch<AnthropicResponse>(`${baseUrl}/messages`, {
                     method: 'POST',
@@ -585,8 +585,8 @@ const anthropicProvider = defineProvider({
                         'anthropic-version': apiVersion,
                     },
                     body: JSON.stringify({
-                        ...input.input,
-                        tools: input.input.tools?.map(tool => {
+                        ...input,
+                        tools: input.tools?.map((tool) => {
                             if (tool.type === 'custom') {
                                 return {
                                     name: tool.name,
@@ -599,14 +599,15 @@ const anthropicProvider = defineProvider({
                             return tool;
                         }),
                     }),
-                    MAX_FETCH_TIME: input.config?.fetchTimeout
+                    MAX_FETCH_TIME: fetchTimeout
                 });
 
                 for (const content of request.content) {
                     if (content.type === 'tool_use') {
-                        const tool = input.input.tools?.find(t => t.name === content.name);
+                        const tool = input.tools?.find((t) => t.name === content.name);
 
-                        if (tool && tool.type === 'custom') {
+                        // Client-located tools are executed by the caller, not here - leave result unset.
+                        if (tool && tool.type === 'custom' && tool.location === 'server') {
                             type ToolParameters = InferToolParameters<typeof tool.input_schema>;
                             type ToolResponse = Awaited<ReturnType<typeof tool.execute>>;
                             const result = await tool.execute(content.input as ToolParameters);
@@ -617,8 +618,8 @@ const anthropicProvider = defineProvider({
 
                 return request;
             },
-            stream: async (input: FunctionInput, ctx) => {
-                const { apiKey, baseUrl, apiVersion } = ctx.config;
+            stream: async (input: AnthropicMessagesInput, ctx: ProviderContext<AnthropicConfig>) => {
+                const { apiKey, baseUrl, apiVersion, fetchTimeout } = ctx.config;
 
                 const response = await fetch<Response, false>(`${baseUrl}/messages`, {
                     method: 'POST',
@@ -628,10 +629,10 @@ const anthropicProvider = defineProvider({
                         'anthropic-version': apiVersion,
                     },
                     body: JSON.stringify({
-                        ...input.input,
+                        ...input,
                         stream: true,
                     }),
-                    MAX_FETCH_TIME: input.config?.fetchTimeout
+                    MAX_FETCH_TIME: fetchTimeout
                 }, false);
 
                 return handleStreamResponse<AnthropicResponse>(response);

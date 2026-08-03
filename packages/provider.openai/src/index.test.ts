@@ -1,10 +1,10 @@
 import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 import openAiProvider, { customTool } from './index';
-import fetch from '@repo/utils/fetch.server';
+import fetch from '@varlabs/ai.utils/fetch.server';
 import { handleStreamResponse } from '@varlabs/ai/utils/streaming';
 
 // Mock the fetch utility
-vi.mock('@repo/utils/fetch.server', () => {
+vi.mock('@varlabs/ai.utils/fetch.server', () => {
     return {
         __esModule: true,
         default: vi.fn(),
@@ -168,9 +168,9 @@ describe('OpenAI Provider', () => {
                     model: 'gpt-4o',
                     input: 'Hello',
                     stream: true,
-                };
+                } as const;
 
-                await openai.models.text.create_response({
+                await openai.models.text.stream_response({
                     model: input.model,
                     input: input.input,
                     stream: input.stream,
@@ -216,6 +216,7 @@ describe('OpenAI Provider', () => {
                 (fetch as Mock<any>).mockResolvedValueOnce(mockResponse);
                 const mockExecute = { temperature: 72, conditions: 'sunny' };
                 const weatherTool = customTool({
+                    location: 'server',
                     description: 'Get the current weather for a location',
                     parameters: {
                         type: 'object',
@@ -245,13 +246,62 @@ describe('OpenAI Provider', () => {
                         name: 'getWeather',
                         strict: false,
                         description: 'Get the current weather for a location',
-                        parameters: JSON.stringify(weatherTool.parameters),
+                        parameters: weatherTool.parameters,
                     }
                 ]);
 
                 // Check if tool execution happened and result was added
                 expect(weatherTool.execute).toHaveBeenCalledWith({ location: 'New York' });
                 // expect(result.output[0].result).toEqual({ temperature: 72, conditions: 'sunny' });
+            });
+
+            it('should not execute client-located tools, leaving the call for the caller', async () => {
+                const mockResponse = {
+                    id: 'resp_124',
+                    object: 'response',
+                    created_at: 1697649,
+                    status: 'completed',
+                    model: 'gpt-4o',
+                    output: [
+                        {
+                            id: 'func_124',
+                            type: 'function_call',
+                            name: 'getLocation',
+                            call_id: 'call_124',
+                            arguments: '{}',
+                            status: 'completed',
+                        }
+                    ],
+                    usage: {
+                        input_tokens: 10,
+                        output_tokens: 8,
+                        total_tokens: 18,
+                        input_token_details: { cached_tokens: 0 },
+                        output_token_details: { reasoning_tokens: 0 },
+                    },
+                };
+
+                (fetch as Mock<any>).mockResolvedValueOnce(mockResponse);
+
+                const locationTool = customTool({
+                    location: 'client',
+                    description: "Get the user's current location",
+                    parameters: {
+                        type: 'object',
+                        properties: {},
+                    },
+                });
+
+                const result = await openai.models.text.create_response({
+                    model: 'gpt-4o',
+                    input: 'Where am I?',
+                    custom_tools: {
+                        getLocation: locationTool,
+                    },
+                });
+
+                const functionCallItem = result.output.find((item: any) => item.type === 'function_call') as any;
+                expect(functionCallItem.result).toBeUndefined();
             });
         });
 
@@ -274,7 +324,7 @@ describe('OpenAI Provider', () => {
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockResponse);
 
-            const result = await openai.models.text.get_response('resp_123');
+            const result = await openai.models.text.get_response({ id: 'resp_123' });
 
             expect(fetch).toHaveBeenCalledWith(
                 `${mockContext.config.baseUrl}/responses/resp_123`,
@@ -298,7 +348,7 @@ describe('OpenAI Provider', () => {
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockDeleteResponse);
 
-            const result = await openai.models.text.delete_response('resp_123');
+            const result = await openai.models.text.delete_response({ id: 'resp_123' });
 
             expect(fetch).toHaveBeenCalledWith(
                 `${mockContext.config.baseUrl}/responses/resp_123`,
@@ -326,7 +376,7 @@ describe('OpenAI Provider', () => {
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockListResponse);
 
-            const result = await openai.models.text.list_input_item_list('resp_123');
+            const result = await openai.models.text.list_input_item_list({ id: 'resp_123' });
 
             expect(fetch).toHaveBeenCalledWith(
                 `${mockContext.config.baseUrl}/responses/resp_123/input_items`,
@@ -393,7 +443,7 @@ describe('OpenAI Provider', () => {
             );
 
             const fetchCalls = vi.mocked(fetch).mock.calls;
-            const bodyParam = JSON.parse(fetchCalls[0][1].body as string);
+            const bodyParam = JSON.parse((fetchCalls[0][1] as any).body as string);
 
             expect(bodyParam).toMatchObject({
                 model: 'dall-e-3',
