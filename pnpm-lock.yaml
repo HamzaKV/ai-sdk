@@ -26,6 +26,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
+      vitest:
+        specifier: ^3.1.4
+        version: 3.1.4(@types/node@22.15.21)(jsdom@25.0.1)
 
   packages/evals:
     dependencies:
@@ -110,6 +113,25 @@ importers:
       '@varlabs/ai.utils':
         specifier: workspace:*
         version: link:../utils
+    devDependencies:
+      copyfiles:
+        specifier: ^2.4.1
+        version: 2.4.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+      vitest:
+        specifier: ^3.1.4
+        version: 3.1.4(@types/node@22.15.21)(jsdom@25.0.1)
+
+  packages/signatures:
+    dependencies:
+      '@varlabs/ai':
+        specifier: workspace:*
+        version: link:../ai
     devDependencies:
       copyfiles:
         specifier: ^2.4.1
