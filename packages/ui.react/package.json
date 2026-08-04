@@ -1,0 +1,59 @@
+{
+    "name": "@varlabs/ai.ui-react",
+    "version": "0.1.0",
+    "description": "React hooks binding for the AI SDK's headless chat core: useChat, file upload, and schema-driven forms",
+    "author": "HamzaKV <hamzakv333@gmail.com>",
+    "repository": "https://github.com/HamzaKV/ai-sdk.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.js"
+    },
+    "scripts": {
+        "clean": "rimraf ./dist",
+        "copy-files:root": "copyfiles -u 0 README.md package.json LICENSE ./dist",
+        "build": "pnpm run clean && tsc && pnpm run copy-files:root",
+        "test": "vitest",
+        "git:main": "git checkout \"main\"",
+        "git:push:main": "git push -u origin \"main\" --tags",
+        "patch": "pnpm run git:main && npm version patch && pnpm run git:push:main",
+        "minor": "pnpm run git:main && npm version minor && pnpm run git:push:main",
+        "major": "pnpm run git:main && npm version major && pnpm run git:push:main",
+        "roll": "pnpm run build && cd dist && npm publish",
+        "roll:patch": "pnpm run patch && pnpm run roll",
+        "roll:minor": "pnpm run minor && pnpm run roll",
+        "roll:major": "pnpm run major && pnpm run roll"
+    },
+    "packageManager": "pnpm@10.6.2",
+    "peerDependencies": {
+        "react": ">=18"
+    },
+    "devDependencies": {
+        "@testing-library/react": "^16.0.1",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.4",
+        "copyfiles": "^2.4.1",
+        "jsdom": "^25.0.1",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "rimraf": "^6.0.1",
+        "typescript": "^5.8.3",
+        "vitest": "^3.1.4"
+    },
+    "dependencies": {
+        "@varlabs/ai": "workspace:*",
+        "@varlabs/ai.file-storage": "workspace:*",
+        "@varlabs/ai.ui-core": "workspace:*"
+    },
+    "keywords": [
+        "ai",
+        "sdk",
+        "typescript",
+        "react",
+        "hooks",
+        "chat"
+    ],
+    "publishConfig": {
+        "access": "public"
+    }
+}
