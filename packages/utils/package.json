@@ -11,6 +11,7 @@
     "clean": "rimraf ./dist",
     "copy-files:root": "copyfiles -u 0 README.md package.json LICENSE ./dist",
     "build": "pnpm run clean && pnpm run copy-files:root && tsc",
+    "test": "vitest",
     "git:main": "git checkout \"main\"",
     "git:push:main": "git push -u origin \"main\" --tags",
     "patch": "pnpm run git:main && npm version patch && pnpm run git:push:main",
@@ -28,7 +29,8 @@
   "devDependencies": {
     "copyfiles": "^2.4.1",
     "rimraf": "^6.0.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
   },
   "dependencies": {
     "undici": "^6.21.3"
