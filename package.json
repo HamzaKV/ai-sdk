@@ -14,10 +14,14 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:ci": "biome ci .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "prepare": "husky"
   },
   "dependencies": {
     "@biomejs/biome": "^1.9.4",
     "@varlabs/monorun": "^0.1.4"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }
