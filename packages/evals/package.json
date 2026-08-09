@@ -16,6 +16,7 @@
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
+        "coverage": "vitest run --coverage",
         "git:main": "git checkout \"main\"",
         "git:push:main": "git push -u origin \"main\" --tags",
         "patch": "pnpm run git:main && npm version patch && pnpm run git:push:main",
@@ -31,7 +32,8 @@
         "copyfiles": "^2.4.1",
         "rimraf": "^6.0.1",
         "typescript": "^5.8.3",
-        "vitest": "^3.1.4"
+        "vitest": "^3.1.4",
+        "@vitest/coverage-v8": "3.1.4"
     },
     "dependencies": {
         "@varlabs/ai": "workspace:*"

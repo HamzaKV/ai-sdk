@@ -10,6 +10,7 @@
     "test": "pnpm -r run test",
     "test:contract": "pnpm --filter @varlabs/ai.anthropic --filter @varlabs/ai.openai run test:contract",
     "typecheck": "pnpm -r run typecheck",
+    "coverage": "pnpm -r run coverage",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:ci": "biome ci .",
