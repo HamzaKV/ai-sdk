@@ -1,5 +1,10 @@
 import type { StreamEvent } from '@varlabs/ai/utils/streaming';
-import { createJobStore, createInMemoryStatePersistence, type JobStore, type HitlJob } from '@varlabs/ai.state';
+import {
+    createJobStore,
+    createInMemoryStatePersistence,
+    type JobStore,
+    type HitlJob,
+} from '@varlabs/ai.state';
 
 export type ChatMessage = {
     id: string;
@@ -62,7 +67,7 @@ const defaultGenerateId = () => `msg_${Date.now()}_${++fallbackIdCounter}`;
 
 const runMiddlewareChain = async <T>(
     value: T,
-    steps: Array<((value: T) => T | Promise<T>) | undefined>
+    steps: Array<((value: T) => T | Promise<T>) | undefined>,
 ): Promise<T> => {
     let result = value;
     for (const step of steps) {
@@ -76,9 +81,11 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
     const generateId = options.generateId ?? defaultGenerateId;
     const middleware = options.middleware ?? [];
     const clientTools = options.clientTools ?? {};
-    const jobStore = options.jobStore ?? createJobStore(
-        createInMemoryStatePersistence<HitlJob<ChatMessage[]>>()
-    );
+    const jobStore =
+        options.jobStore ??
+        createJobStore(
+            createInMemoryStatePersistence<HitlJob<ChatMessage[]>>(),
+        );
 
     let state: ChatState = { messages: [], status: 'idle' };
     const listeners = new Set<(state: ChatState) => void>();
@@ -90,16 +97,21 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
 
     const upsertMessage = (message: ChatMessage) => {
         const index = state.messages.findIndex((m) => m.id === message.id);
-        const messages = index === -1
-            ? [...state.messages, message]
-            : state.messages.map((m, i) => (i === index ? message : m));
+        const messages =
+            index === -1
+                ? [...state.messages, message]
+                : state.messages.map((m, i) => (i === index ? message : m));
         setState({ messages });
     };
 
     const runTurn = async (): Promise<void> => {
         setState({ status: 'streaming', error: undefined });
 
-        let assistant: ChatMessage = { id: generateId(), role: 'assistant', content: '' };
+        let assistant: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: '',
+        };
         upsertMessage(assistant);
 
         for await (const rawEvent of options.streamFn(state.messages)) {
@@ -108,7 +120,10 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
             ]);
 
             if (event.type === 'text-delta') {
-                assistant = { ...assistant, content: assistant.content + event.delta };
+                assistant = {
+                    ...assistant,
+                    content: assistant.content + event.delta,
+                };
                 upsertMessage(assistant);
                 continue;
             }
@@ -130,7 +145,10 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
             if (event.type === 'client-tool-call') {
                 const executor = clientTools[event.name];
                 if (!executor) {
-                    setState({ status: 'error', error: `No client tool registered for "${event.name}"` });
+                    setState({
+                        status: 'error',
+                        error: `No client tool registered for "${event.name}"`,
+                    });
                     return;
                 }
                 const result = await executor(event.args);
@@ -147,11 +165,20 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
                 await jobStore.create({
                     id: event.jobId,
                     conversationState: state.messages,
-                    pendingToolCall: { toolCallId: event.toolCallId, name: event.name, args: event.args },
+                    pendingToolCall: {
+                        toolCallId: event.toolCallId,
+                        name: event.name,
+                        args: event.args,
+                    },
                 });
                 setState({
                     status: 'awaiting-approval',
-                    pendingApproval: { jobId: event.jobId, toolCallId: event.toolCallId, name: event.name, args: event.args },
+                    pendingApproval: {
+                        jobId: event.jobId,
+                        toolCallId: event.toolCallId,
+                        name: event.name,
+                        args: event.args,
+                    },
                 });
                 return;
             }
@@ -161,7 +188,10 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
         setState({ status: 'idle' });
     };
 
-    const resolvePendingApproval = async (result: unknown, toolCallId: string): Promise<void> => {
+    const resolvePendingApproval = async (
+        result: unknown,
+        toolCallId: string,
+    ): Promise<void> => {
         upsertMessage({
             id: generateId(),
             role: 'tool',
@@ -180,7 +210,9 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
         },
         async sendMessage(content) {
             if (state.status !== 'idle' && state.status !== 'error') {
-                throw new Error(`Cannot send a message while status is "${state.status}"`);
+                throw new Error(
+                    `Cannot send a message while status is "${state.status}"`,
+                );
             }
             // Flip to 'streaming' synchronously (before any await) so a second call made
             // before this one yields to the event loop is rejected by the check above.
@@ -188,7 +220,7 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
 
             const message = await runMiddlewareChain(
                 { id: generateId(), role: 'user' as const, content },
-                [...middleware.map((m) => m.beforeSend)]
+                [...middleware.map((m) => m.beforeSend)],
             );
             upsertMessage(message);
             await runTurn();
@@ -200,11 +232,16 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
             const job = await jobStore.approve(pending.jobId, args);
             const executor = clientTools[pending.name];
             if (!executor) {
-                setState({ status: 'error', error: `No client tool registered for "${pending.name}"` });
+                setState({
+                    status: 'error',
+                    error: `No client tool registered for "${pending.name}"`,
+                });
                 return;
             }
 
-            const result = await executor(job?.pendingToolCall.args ?? pending.args);
+            const result = await executor(
+                job?.pendingToolCall.args ?? pending.args,
+            );
             await resolvePendingApproval(result, pending.toolCallId);
         },
         async deny(reason) {
@@ -212,7 +249,10 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
             if (!pending) throw new Error('No pending approval to deny');
 
             await jobStore.deny(pending.jobId, reason);
-            await resolvePendingApproval({ error: 'denied', reason }, pending.toolCallId);
+            await resolvePendingApproval(
+                { error: 'denied', reason },
+                pending.toolCallId,
+            );
         },
     };
 };

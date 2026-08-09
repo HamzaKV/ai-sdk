@@ -8,28 +8,35 @@ async function* gen(events: StreamEvent[]): AsyncGenerator<StreamEvent> {
 
 describe('createChatCore', () => {
     it('streams text deltas into an assistant message and finishes idle', async () => {
-        const streamFn = vi.fn().mockReturnValueOnce(gen([
-            { type: 'text-delta', delta: 'Hello ' },
-            { type: 'text-delta', delta: 'world' },
-            { type: 'done' },
-        ]));
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([
+                    { type: 'text-delta', delta: 'Hello ' },
+                    { type: 'text-delta', delta: 'world' },
+                    { type: 'done' },
+                ]),
+            );
 
         const chat = createChatCore({ streamFn });
         await chat.sendMessage('hi');
 
         const state = chat.getState();
         expect(state.status).toBe('idle');
-        expect(state.messages.map((m) => ({ role: m.role, content: m.content }))).toEqual([
+        expect(
+            state.messages.map((m) => ({ role: m.role, content: m.content })),
+        ).toEqual([
             { role: 'user', content: 'hi' },
             { role: 'assistant', content: 'Hello world' },
         ]);
     });
 
     it('notifies subscribers on every state change', async () => {
-        const streamFn = vi.fn().mockReturnValueOnce(gen([
-            { type: 'text-delta', delta: 'hi' },
-            { type: 'done' },
-        ]));
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([{ type: 'text-delta', delta: 'hi' }, { type: 'done' }]),
+            );
 
         const chat = createChatCore({ streamFn });
         const seen: string[] = [];
@@ -42,19 +49,24 @@ describe('createChatCore', () => {
     });
 
     it('sets status to error on an error event', async () => {
-        const streamFn = vi.fn().mockReturnValueOnce(gen([
-            { type: 'error', message: 'boom' },
-        ]));
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(gen([{ type: 'error', message: 'boom' }]));
 
         const chat = createChatCore({ streamFn });
         await chat.sendMessage('hi');
 
-        expect(chat.getState()).toMatchObject({ status: 'error', error: 'boom' });
+        expect(chat.getState()).toMatchObject({
+            status: 'error',
+            error: 'boom',
+        });
     });
 
     it('rejects sendMessage while a turn is already in flight', async () => {
         let resolveStream: () => void = () => {};
-        const blocked = new Promise<void>((resolve) => { resolveStream = resolve; });
+        const blocked = new Promise<void>((resolve) => {
+            resolveStream = resolve;
+        });
 
         async function* slowGen(): AsyncGenerator<StreamEvent> {
             yield { type: 'text-delta', delta: 'hi' };
@@ -66,21 +78,33 @@ describe('createChatCore', () => {
         const chat = createChatCore({ streamFn });
 
         const first = chat.sendMessage('one');
-        await expect(chat.sendMessage('two')).rejects.toThrow('Cannot send a message');
+        await expect(chat.sendMessage('two')).rejects.toThrow(
+            'Cannot send a message',
+        );
 
         resolveStream();
         await first;
     });
 
     it('auto-executes registered client tools and continues the same turn', async () => {
-        const streamFn = vi.fn()
-            .mockReturnValueOnce(gen([
-                { type: 'client-tool-call', toolCallId: 'call_1', name: 'getLocation', args: {} },
-            ]))
-            .mockReturnValueOnce(gen([
-                { type: 'text-delta', delta: 'You are in NYC' },
-                { type: 'done' },
-            ]));
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([
+                    {
+                        type: 'client-tool-call',
+                        toolCallId: 'call_1',
+                        name: 'getLocation',
+                        args: {},
+                    },
+                ]),
+            )
+            .mockReturnValueOnce(
+                gen([
+                    { type: 'text-delta', delta: 'You are in NYC' },
+                    { type: 'done' },
+                ]),
+            );
 
         const getLocation = vi.fn().mockResolvedValue({ city: 'NYC' });
         const chat = createChatCore({ streamFn, clientTools: { getLocation } });
@@ -94,13 +118,24 @@ describe('createChatCore', () => {
         expect(state.status).toBe('idle');
         const toolMessage = state.messages.find((m) => m.role === 'tool');
         expect(toolMessage?.content).toBe(JSON.stringify({ city: 'NYC' }));
-        expect(state.messages.some((m) => m.role === 'assistant' && m.content === 'You are in NYC')).toBe(true);
+        expect(
+            state.messages.some(
+                (m) => m.role === 'assistant' && m.content === 'You are in NYC',
+            ),
+        ).toBe(true);
     });
 
     it('errors when a client-tool-call has no registered executor', async () => {
-        const streamFn = vi.fn().mockReturnValueOnce(gen([
-            { type: 'client-tool-call', toolCallId: 'call_1', name: 'unknownTool', args: {} },
-        ]));
+        const streamFn = vi.fn().mockReturnValueOnce(
+            gen([
+                {
+                    type: 'client-tool-call',
+                    toolCallId: 'call_1',
+                    name: 'unknownTool',
+                    args: {},
+                },
+            ]),
+        );
 
         const chat = createChatCore({ streamFn });
         await chat.sendMessage('hi');
@@ -110,21 +145,35 @@ describe('createChatCore', () => {
     });
 
     it('pauses on hitl-pending and resumes with a fresh stream after approve', async () => {
-        const streamFn = vi.fn()
-            .mockReturnValueOnce(gen([
-                { type: 'hitl-pending', jobId: 'job_1', toolCallId: 'call_1', name: 'deleteAccount', args: { id: 42 } },
-            ]))
-            .mockReturnValueOnce(gen([
-                { type: 'text-delta', delta: 'Done' },
-                { type: 'done' },
-            ]));
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([
+                    {
+                        type: 'hitl-pending',
+                        jobId: 'job_1',
+                        toolCallId: 'call_1',
+                        name: 'deleteAccount',
+                        args: { id: 42 },
+                    },
+                ]),
+            )
+            .mockReturnValueOnce(
+                gen([{ type: 'text-delta', delta: 'Done' }, { type: 'done' }]),
+            );
 
         const deleteAccount = vi.fn().mockResolvedValue({ ok: true });
-        const chat = createChatCore({ streamFn, clientTools: { deleteAccount } });
+        const chat = createChatCore({
+            streamFn,
+            clientTools: { deleteAccount },
+        });
 
         await chat.sendMessage('delete my account');
         expect(chat.getState().status).toBe('awaiting-approval');
-        expect(chat.getState().pendingApproval).toMatchObject({ jobId: 'job_1', name: 'deleteAccount' });
+        expect(chat.getState().pendingApproval).toMatchObject({
+            jobId: 'job_1',
+            name: 'deleteAccount',
+        });
 
         await chat.approve();
 
@@ -135,10 +184,19 @@ describe('createChatCore', () => {
     });
 
     it('lets approve() edit the tool args before executing', async () => {
-        const streamFn = vi.fn()
-            .mockReturnValueOnce(gen([
-                { type: 'hitl-pending', jobId: 'job_2', toolCallId: 'call_2', name: 'sendEmail', args: { to: 'a@example.com' } },
-            ]))
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([
+                    {
+                        type: 'hitl-pending',
+                        jobId: 'job_2',
+                        toolCallId: 'call_2',
+                        name: 'sendEmail',
+                        args: { to: 'a@example.com' },
+                    },
+                ]),
+            )
             .mockReturnValueOnce(gen([{ type: 'done' }]));
 
         const sendEmail = vi.fn().mockResolvedValue({ sent: true });
@@ -151,21 +209,38 @@ describe('createChatCore', () => {
     });
 
     it('feeds a denial back as a tool result and continues the conversation', async () => {
-        const streamFn = vi.fn()
-            .mockReturnValueOnce(gen([
-                { type: 'hitl-pending', jobId: 'job_3', toolCallId: 'call_3', name: 'deleteAccount', args: {} },
-            ]))
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([
+                    {
+                        type: 'hitl-pending',
+                        jobId: 'job_3',
+                        toolCallId: 'call_3',
+                        name: 'deleteAccount',
+                        args: {},
+                    },
+                ]),
+            )
             .mockReturnValueOnce(gen([{ type: 'done' }]));
 
         const deleteAccount = vi.fn();
-        const chat = createChatCore({ streamFn, clientTools: { deleteAccount } });
+        const chat = createChatCore({
+            streamFn,
+            clientTools: { deleteAccount },
+        });
 
         await chat.sendMessage('delete my account');
         await chat.deny('not authorized');
 
         expect(deleteAccount).not.toHaveBeenCalled();
-        const toolMessage = chat.getState().messages.find((m) => m.role === 'tool');
-        expect(JSON.parse(toolMessage?.content ?? '{}')).toEqual({ error: 'denied', reason: 'not authorized' });
+        const toolMessage = chat
+            .getState()
+            .messages.find((m) => m.role === 'tool');
+        expect(JSON.parse(toolMessage?.content ?? '{}')).toEqual({
+            error: 'denied',
+            reason: 'not authorized',
+        });
         expect(chat.getState().status).toBe('idle');
     });
 
@@ -176,14 +251,21 @@ describe('createChatCore', () => {
     });
 
     it('runs beforeSend, onChunk, and onFinish middleware in order', async () => {
-        const streamFn = vi.fn().mockReturnValueOnce(gen([
-            { type: 'text-delta', delta: 'hi' },
-            { type: 'done' },
-        ]));
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([{ type: 'text-delta', delta: 'hi' }, { type: 'done' }]),
+            );
 
-        const beforeSend = vi.fn((m: ChatMessage) => ({ ...m, content: `[redacted] ${m.content}` }));
+        const beforeSend = vi.fn((m: ChatMessage) => ({
+            ...m,
+            content: `[redacted] ${m.content}`,
+        }));
         const onChunk = vi.fn((e: StreamEvent) => e);
-        const onFinish = vi.fn((m: ChatMessage) => ({ ...m, content: `${m.content}!` }));
+        const onFinish = vi.fn((m: ChatMessage) => ({
+            ...m,
+            content: `${m.content}!`,
+        }));
 
         const chat = createChatCore({
             streamFn,

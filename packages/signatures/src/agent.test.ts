@@ -11,7 +11,10 @@ describe('runReActAgent', () => {
     it('returns the parsed final answer when the model does not call a tool', async () => {
         const callModel = vi.fn().mockResolvedValue('{"answer": "Paris"}');
 
-        const result = await runReActAgent({ signature, callModel }, { question: 'capital of France?' });
+        const result = await runReActAgent(
+            { signature, callModel },
+            { question: 'capital of France?' },
+        );
 
         expect(result).toEqual({ answer: 'Paris' });
         expect(callModel).toHaveBeenCalledTimes(1);
@@ -26,16 +29,21 @@ describe('runReActAgent', () => {
             execute: vi.fn().mockResolvedValue({ city: 'Paris' }),
         };
 
-        const callModel = vi.fn()
-            .mockResolvedValueOnce('{"tool": "lookupCapital", "args": {"country": "France"}}')
+        const callModel = vi
+            .fn()
+            .mockResolvedValueOnce(
+                '{"tool": "lookupCapital", "args": {"country": "France"}}',
+            )
             .mockResolvedValueOnce('{"answer": "Paris"}');
 
         const result = await runReActAgent(
             { signature, tools: { lookupCapital }, callModel },
-            { question: 'capital of France?' }
+            { question: 'capital of France?' },
         );
 
-        expect(lookupCapital.execute).toHaveBeenCalledWith({ country: 'France' });
+        expect(lookupCapital.execute).toHaveBeenCalledWith({
+            country: 'France',
+        });
         expect(result).toEqual({ answer: 'Paris' });
         expect(callModel).toHaveBeenCalledTimes(2);
         expect(callModel.mock.calls[1][0]).toContain('Called lookupCapital');
@@ -50,13 +58,14 @@ describe('runReActAgent', () => {
         };
 
         const onClientToolCall = vi.fn().mockResolvedValue({ city: 'NYC' });
-        const callModel = vi.fn()
+        const callModel = vi
+            .fn()
             .mockResolvedValueOnce('{"tool": "getLocation", "args": {}}')
             .mockResolvedValueOnce('{"answer": "NYC"}');
 
         const result = await runReActAgent(
             { signature, tools: { getLocation }, onClientToolCall, callModel },
-            { question: 'where am I?' }
+            { question: 'where am I?' },
         );
 
         expect(onClientToolCall).toHaveBeenCalledWith('getLocation', {});
@@ -71,29 +80,43 @@ describe('runReActAgent', () => {
             location: 'client' as const,
         };
 
-        const callModel = vi.fn().mockResolvedValueOnce('{"tool": "getLocation", "args": {}}');
+        const callModel = vi
+            .fn()
+            .mockResolvedValueOnce('{"tool": "getLocation", "args": {}}');
 
         await expect(
-            runReActAgent({ signature, tools: { getLocation }, callModel, maxSteps: 1 }, { question: 'where?' })
+            runReActAgent(
+                { signature, tools: { getLocation }, callModel, maxSteps: 1 },
+                { question: 'where?' },
+            ),
         ).rejects.toThrow('no onClientToolCall handler was provided');
     });
 
     it('notes an unknown tool name and lets the model retry', async () => {
-        const callModel = vi.fn()
+        const callModel = vi
+            .fn()
             .mockResolvedValueOnce('{"tool": "doesNotExist", "args": {}}')
             .mockResolvedValueOnce('{"answer": "recovered"}');
 
-        const result = await runReActAgent({ signature, callModel }, { question: 'x' });
+        const result = await runReActAgent(
+            { signature, callModel },
+            { question: 'x' },
+        );
 
         expect(result).toEqual({ answer: 'recovered' });
         expect(callModel.mock.calls[1][0]).toContain('does not exist');
     });
 
     it('throws after exceeding maxSteps without a final answer', async () => {
-        const callModel = vi.fn().mockResolvedValue('{"tool": "doesNotExist", "args": {}}');
+        const callModel = vi
+            .fn()
+            .mockResolvedValue('{"tool": "doesNotExist", "args": {}}');
 
         await expect(
-            runReActAgent({ signature, callModel, maxSteps: 2 }, { question: 'x' })
+            runReActAgent(
+                { signature, callModel, maxSteps: 2 },
+                { question: 'x' },
+            ),
         ).rejects.toThrow('exceeded maxSteps (2)');
         expect(callModel).toHaveBeenCalledTimes(2);
     });

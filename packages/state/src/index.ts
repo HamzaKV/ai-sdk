@@ -4,7 +4,9 @@ export type StatePersistence<T = unknown> = {
     delete(key: string): Promise<void>;
 };
 
-export const createInMemoryStatePersistence = <T = unknown>(): StatePersistence<T> => {
+export const createInMemoryStatePersistence = <
+    T = unknown,
+>(): StatePersistence<T> => {
     const store = new Map<string, T>();
     return {
         async get(key) {
@@ -64,12 +66,18 @@ export type JobStore<ConversationState = unknown> = {
     }): Promise<HitlJob<ConversationState>>;
     get(id: string): Promise<HitlJob<ConversationState> | undefined>;
     // Approving optionally edits the tool call's args (the HITL "edit args before approving" flow).
-    approve(id: string, args?: unknown): Promise<HitlJob<ConversationState> | undefined>;
-    deny(id: string, reason?: string): Promise<HitlJob<ConversationState> | undefined>;
+    approve(
+        id: string,
+        args?: unknown,
+    ): Promise<HitlJob<ConversationState> | undefined>;
+    deny(
+        id: string,
+        reason?: string,
+    ): Promise<HitlJob<ConversationState> | undefined>;
 };
 
 export const createJobStore = <ConversationState = unknown>(
-    persistence: StatePersistence<HitlJob<ConversationState>>
+    persistence: StatePersistence<HitlJob<ConversationState>>,
 ): JobStore<ConversationState> => {
     return {
         async create(input) {
@@ -87,9 +95,10 @@ export const createJobStore = <ConversationState = unknown>(
             const updated: HitlJob<ConversationState> = {
                 ...job,
                 status: 'approved',
-                pendingToolCall: args !== undefined
-                    ? { ...job.pendingToolCall, args }
-                    : job.pendingToolCall,
+                pendingToolCall:
+                    args !== undefined
+                        ? { ...job.pendingToolCall, args }
+                        : job.pendingToolCall,
                 updatedAt: Date.now(),
             };
             await persistence.set(id, updated);

@@ -7,7 +7,9 @@ describe('useFileUpload', () => {
     const originalFetch = global.fetch;
 
     beforeEach(() => {
-        global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+        global.fetch = vi
+            .fn()
+            .mockResolvedValue(new Response(null, { status: 200 }));
     });
 
     afterEach(() => {
@@ -21,15 +23,18 @@ describe('useFileUpload', () => {
         await act(async () => {
             await result.current.addFile(
                 { name: 'a.txt', type: 'text/plain', size: 5 },
-                new TextEncoder().encode('hello')
+                new TextEncoder().encode('hello'),
             );
         });
 
         expect(result.current.attachments).toHaveLength(1);
-        expect(result.current.attachments[0]).toMatchObject({ name: 'a.txt', type: 'text/plain' });
+        expect(result.current.attachments[0]).toMatchObject({
+            name: 'a.txt',
+            type: 'text/plain',
+        });
         expect(global.fetch).toHaveBeenCalledWith(
             expect.stringContaining('memory://'),
-            expect.objectContaining({ method: 'PUT' })
+            expect.objectContaining({ method: 'PUT' }),
         );
     });
 
@@ -42,7 +47,7 @@ describe('useFileUpload', () => {
         await act(async () => {
             const attachment = await result.current.addFile(
                 { name: 'a.txt', type: 'text/plain', size: 5 },
-                new TextEncoder().encode('hello')
+                new TextEncoder().encode('hello'),
             );
             fileId = attachment.fileId;
         });
@@ -60,7 +65,10 @@ describe('useFileUpload', () => {
         const { result } = renderHook(() => useFileUpload(storage));
 
         await act(async () => {
-            await result.current.addFile({ name: 'a.txt', type: 'text/plain', size: 5 }, new Uint8Array());
+            await result.current.addFile(
+                { name: 'a.txt', type: 'text/plain', size: 5 },
+                new Uint8Array(),
+            );
         });
 
         act(() => {

@@ -9,7 +9,9 @@ describe('defineSignature', () => {
     });
 
     it('compiles a prompt containing the instructions, inputs, and expected output fields', () => {
-        const prompt = qa.compilePrompt({ question: 'What is the capital of France?' });
+        const prompt = qa.compilePrompt({
+            question: 'What is the capital of France?',
+        });
 
         expect(prompt).toContain('Answer the question concisely.');
         expect(prompt).toContain('question: "What is the capital of France?"');

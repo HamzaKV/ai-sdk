@@ -14,7 +14,10 @@ export type McpClientOptions = {
 
 export type McpClient = {
     listTools(): Promise<McpToolDefinition[]>;
-    callTool(name: string, args: unknown): Promise<{ content?: unknown; isError?: boolean }>;
+    callTool(
+        name: string,
+        args: unknown,
+    ): Promise<{ content?: unknown; isError?: boolean }>;
     close(): Promise<void>;
 };
 
@@ -53,7 +56,7 @@ export const createMcpClient = (options: McpClientOptions): McpClient => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json, text/event-stream',
+                Accept: 'application/json, text/event-stream',
                 ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
                 ...options.headers,
             },
@@ -77,11 +80,16 @@ export const createMcpClient = (options: McpClientOptions): McpClient => {
         const contentType = res.headers.get('Content-Type') ?? '';
         const messages = contentType.includes('text/event-stream')
             ? parseSseMessages(await res.text())
-            : [await res.json() as JsonRpcMessage];
+            : [(await res.json()) as JsonRpcMessage];
 
-        const message = messages.find((m) => m.id === id) ?? messages[messages.length - 1];
-        if (!message) throw new Error(`MCP request produced no response: ${method}`);
-        if (message.error) throw new Error(`MCP error (${message.error.code}): ${message.error.message}`);
+        const message =
+            messages.find((m) => m.id === id) ?? messages[messages.length - 1];
+        if (!message)
+            throw new Error(`MCP request produced no response: ${method}`);
+        if (message.error)
+            throw new Error(
+                `MCP error (${message.error.code}): ${message.error.message}`,
+            );
         return message.result;
     };
 
@@ -121,7 +129,7 @@ export const createMcpClient = (options: McpClientOptions): McpClient => {
 // Converts a remote MCP server's tools into the SDK's Tool shape (server-located: the
 // SDK's own server executes them by calling back out to the MCP server over HTTP).
 export const mcpToolsAsSdkTools = async (
-    client: McpClient
+    client: McpClient,
 ): Promise<Record<string, ServerTool<any, unknown>>> => {
     const tools = await client.listTools();
     const sdkTools: Record<string, ServerTool<any, unknown>> = {};
@@ -135,7 +143,9 @@ export const mcpToolsAsSdkTools = async (
             execute: async (args: unknown) => {
                 const result = await client.callTool(tool.name, args);
                 if (result.isError) {
-                    throw new Error(`MCP tool "${tool.name}" returned an error`);
+                    throw new Error(
+                        `MCP tool "${tool.name}" returned an error`,
+                    );
                 }
                 return result.content;
             },

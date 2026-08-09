@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { exactMatchScorer, cosineSimilarityScorer, llmJudgeScorer } from './scorers.js';
+import {
+    exactMatchScorer,
+    cosineSimilarityScorer,
+    llmJudgeScorer,
+} from './scorers.js';
 
 describe('exactMatchScorer', () => {
     it('scores 1 for an exact match', async () => {
@@ -22,25 +26,30 @@ describe('exactMatchScorer', () => {
     });
 
     it('can be made case-insensitive', async () => {
-        expect(await exactMatchScorer({ caseSensitive: false })('paris', 'Paris')).toBe(1);
+        expect(
+            await exactMatchScorer({ caseSensitive: false })('paris', 'Paris'),
+        ).toBe(1);
     });
 });
 
 describe('cosineSimilarityScorer', () => {
     it('scores 1 for identical embeddings', async () => {
-        const embed = async (text: string) => (text === 'a' ? [1, 0, 0] : [1, 0, 0]);
+        const embed = async (text: string) =>
+            text === 'a' ? [1, 0, 0] : [1, 0, 0];
         const score = await cosineSimilarityScorer(embed)('a', 'b');
         expect(score).toBe(1);
     });
 
     it('scores 0 for opposite embeddings', async () => {
-        const embed = async (text: string) => (text === 'a' ? [1, 0, 0] : [-1, 0, 0]);
+        const embed = async (text: string) =>
+            text === 'a' ? [1, 0, 0] : [-1, 0, 0];
         const score = await cosineSimilarityScorer(embed)('a', 'b');
         expect(score).toBe(0);
     });
 
     it('scores 0.5 for orthogonal embeddings', async () => {
-        const embed = async (text: string) => (text === 'a' ? [1, 0, 0] : [0, 1, 0]);
+        const embed = async (text: string) =>
+            text === 'a' ? [1, 0, 0] : [0, 1, 0];
         const score = await cosineSimilarityScorer(embed)('a', 'b');
         expect(score).toBeCloseTo(0.5);
     });
@@ -61,7 +70,9 @@ describe('llmJudgeScorer', () => {
 
     it('throws when the judge response is not a number', async () => {
         const judge = async () => 'definitely not a number';
-        await expect(llmJudgeScorer({ judge })('actual', 'expected')).rejects.toThrow('not return a parseable score');
+        await expect(
+            llmJudgeScorer({ judge })('actual', 'expected'),
+        ).rejects.toThrow('not return a parseable score');
     });
 
     it('includes the rubric in the prompt sent to the judge', async () => {
@@ -70,7 +81,10 @@ describe('llmJudgeScorer', () => {
             capturedPrompt = prompt;
             return '1';
         };
-        await llmJudgeScorer({ judge, rubric: 'Must mention the capital city' })('actual', 'expected');
+        await llmJudgeScorer({
+            judge,
+            rubric: 'Must mention the capital city',
+        })('actual', 'expected');
         expect(capturedPrompt).toContain('Must mention the capital city');
     });
 });

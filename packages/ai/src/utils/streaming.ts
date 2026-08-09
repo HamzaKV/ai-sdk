@@ -2,15 +2,26 @@
 // so downstream consumers (ui.core, signatures) never see provider-specific shapes.
 export type StreamEvent =
     | { type: 'text-delta'; delta: string }
-    | { type: 'client-tool-call'; toolCallId: string; name: string; args: unknown }
-    | { type: 'hitl-pending'; jobId: string; toolCallId: string; name: string; args: unknown }
+    | {
+          type: 'client-tool-call';
+          toolCallId: string;
+          name: string;
+          args: unknown;
+      }
+    | {
+          type: 'hitl-pending';
+          jobId: string;
+          toolCallId: string;
+          name: string;
+          args: unknown;
+      }
     | { type: 'error'; message: string }
     | { type: 'done' };
 
 // Wraps a provider's raw parsed stream, mapping each raw chunk into the shared StreamEvent protocol.
 export async function* mapToStreamEvents<T>(
     source: AsyncGenerator<T>,
-    mapper: (chunk: T) => StreamEvent | StreamEvent[] | undefined
+    mapper: (chunk: T) => StreamEvent | StreamEvent[] | undefined,
 ): AsyncGenerator<StreamEvent> {
     for await (const chunk of source) {
         const mapped = mapper(chunk);
@@ -26,11 +37,11 @@ export async function* mapToStreamEvents<T>(
 export async function* handleStreamResponse<T>(
     res: Response,
     options?: {
-        decoder?: TextDecoder
-        onRawChunk?: (chunk: string) => void
-        abortSignal?: AbortSignal
-        prefix?: string // e.g., 'data:' or custom SSE prefix
-    }
+        decoder?: TextDecoder;
+        onRawChunk?: (chunk: string) => void;
+        abortSignal?: AbortSignal;
+        prefix?: string; // e.g., 'data:' or custom SSE prefix
+    },
 ) {
     const reader = res.body?.getReader();
     if (!reader) throw new Error('Missing response body');
@@ -74,11 +85,11 @@ export async function* handleStreamResponse<T>(
 
 export const createDataStream = <T = unknown>(options: {
     execute: (dataStream: {
-        writeData: (data: T) => void
-        writeMessageAnnotation: (annotation: Record<string, any>) => void
-        merge: (stream: AsyncGenerator<T>) => Promise<void>
-    }) => Promise<void> | void
-    onError?: (err: Error) => string
+        writeData: (data: T) => void;
+        writeMessageAnnotation: (annotation: Record<string, any>) => void;
+        merge: (stream: AsyncGenerator<T>) => Promise<void>;
+    }) => Promise<void> | void;
+    onError?: (err: Error) => string;
 }) => {
     const encoder = new TextEncoder();
     let controller: ReadableStreamDefaultController<Uint8Array>;
@@ -88,11 +99,19 @@ export const createDataStream = <T = unknown>(options: {
             controller = ctrl;
 
             const writeData = (data: T) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
+                );
             };
 
-            const writeMessageAnnotation = (annotation: Record<string, any>) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ annotation })}\n\n`));
+            const writeMessageAnnotation = (
+                annotation: Record<string, any>,
+            ) => {
+                controller.enqueue(
+                    encoder.encode(
+                        `data: ${JSON.stringify({ annotation })}\n\n`,
+                    ),
+                );
             };
 
             const merge = async (incoming: AsyncGenerator<T>) => {
@@ -102,12 +121,22 @@ export const createDataStream = <T = unknown>(options: {
             };
 
             try {
-                await options.execute({ writeData, writeMessageAnnotation, merge });
+                await options.execute({
+                    writeData,
+                    writeMessageAnnotation,
+                    merge,
+                });
                 controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 controller.close();
             } catch (err: any) {
-                const message = options.onError ? options.onError(err) : `Stream error: ${err.message}`;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: message })}\n\n`));
+                const message = options.onError
+                    ? options.onError(err)
+                    : `Stream error: ${err.message}`;
+                controller.enqueue(
+                    encoder.encode(
+                        `data: ${JSON.stringify({ error: message })}\n\n`,
+                    ),
+                );
                 controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 controller.close();
             }
@@ -123,12 +152,15 @@ export const pipeStreamToResponse = async <T, S extends Response>(
     options?: {
         onError?: (err: Error) => string;
         onClose?: () => void;
-    }
+    },
 ) => {
     const nodejsRes = res as any;
 
     // Node.js: Writable stream (e.g., Express, Fastify)
-    if (typeof nodejsRes.write === 'function' && typeof nodejsRes.end === 'function') {
+    if (
+        typeof nodejsRes.write === 'function' &&
+        typeof nodejsRes.end === 'function'
+    ) {
         const reader = stream.getReader();
         nodejsRes.setHeader('Content-Type', 'text/event-stream');
         nodejsRes.setHeader('Cache-Control', 'no-cache');

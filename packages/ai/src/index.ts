@@ -8,8 +8,11 @@ export type MiddlewareContext<Input = any> = {
 };
 
 export type Middleware = <Input>(
-    ctx: MiddlewareContext<Input>
-) => MiddlewareContext<Input> | false | Promise<MiddlewareContext<Input> | false>;
+    ctx: MiddlewareContext<Input>,
+) =>
+    | MiddlewareContext<Input>
+    | false
+    | Promise<MiddlewareContext<Input> | false>;
 
 type ProviderInstance = ReturnType<ReturnType<typeof defineProvider>>;
 
@@ -25,7 +28,7 @@ type AIClient<TProviders extends ProviderMap> = {
 };
 
 export const createAIClient = <TProviders extends ProviderMap>(
-    options: CreateAIClientOptions<TProviders>
+    options: CreateAIClientOptions<TProviders>,
 ) => {
     const { providers, middleware = [] } = options;
 
@@ -34,7 +37,7 @@ export const createAIClient = <TProviders extends ProviderMap>(
 
     // Run the middleware chain, threading the (possibly transformed) ctx through each step
     const executeMiddleware = async <Input>(
-        initialCtx: MiddlewareContext<Input>
+        initialCtx: MiddlewareContext<Input>,
     ): Promise<MiddlewareContext<Input> | false> => {
         let ctx = initialCtx;
         for (const mw of middleware) {
@@ -56,13 +59,22 @@ export const createAIClient = <TProviders extends ProviderMap>(
             const model = provider.models[modelKey];
 
             // Wrap each call in the model
-            const wrappedModel = {} as TProviders[keyof TProviders]['models'][string];
+            const wrappedModel =
+                {} as TProviders[keyof TProviders]['models'][string];
             for (const callKey of Object.keys(model)) {
                 const callFn = model[callKey];
 
                 // Wrap the call function
-                (wrappedModel as any)[callKey] = async (input: any, override?: any) => {
-                    const ctx = await executeMiddleware({ provider: key as string, model: modelKey, call: callKey, input });
+                (wrappedModel as any)[callKey] = async (
+                    input: any,
+                    override?: any,
+                ) => {
+                    const ctx = await executeMiddleware({
+                        provider: key as string,
+                        model: modelKey,
+                        call: callKey,
+                        input,
+                    });
                     if (!ctx) {
                         throw new Error('Middleware stopped execution');
                     }

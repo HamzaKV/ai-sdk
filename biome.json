@@ -16,7 +16,8 @@
             ".next/",
             "*.json",
             "payload-types.ts",
-            "*.css"
+            "*.css",
+            ".history/"
         ]
     },
     "formatter": {

@@ -17,7 +17,9 @@ export type ClientTool<Input> = ToolBase<Input> & {
     location: 'client';
 };
 
-export type Tool<Input, Output = unknown> = ServerTool<Input, Output> | ClientTool<Input>;
+export type Tool<Input, Output = unknown> =
+    | ServerTool<Input, Output>
+    | ClientTool<Input>;
 
 export const defineTool = <T extends Tool<any, any>>(tool: T): T => {
     return tool;

@@ -7,7 +7,9 @@ export type FileMeta = {
 // Upload-then-reference: the SDK never carries file bytes through chat requests -
 // callers upload directly to the backend this adapter fronts, then pass the fileId around.
 export type FileStorage = {
-    getUploadUrl(meta: FileMeta): Promise<{ uploadUrl: string; fileId: string }>;
+    getUploadUrl(
+        meta: FileMeta,
+    ): Promise<{ uploadUrl: string; fileId: string }>;
     getDownloadUrl(fileId: string): Promise<string>;
     delete(fileId: string): Promise<void>;
 };

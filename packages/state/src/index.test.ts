@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createInMemoryStatePersistence, createJobStore, type HitlJob } from './index';
+import {
+    createInMemoryStatePersistence,
+    createJobStore,
+    type HitlJob,
+} from './index';
 
 describe('createInMemoryStatePersistence', () => {
     it('stores, retrieves, and deletes values by key', async () => {
@@ -22,7 +26,11 @@ describe('createJobStore', () => {
         const job = await jobs.create({
             id: 'job_1',
             conversationState: { messages: ['hello'] },
-            pendingToolCall: { toolCallId: 'call_1', name: 'getLocation', args: {} },
+            pendingToolCall: {
+                toolCallId: 'call_1',
+                name: 'getLocation',
+                args: {},
+            },
         });
 
         expect(job.status).toBe('pending');
@@ -34,7 +42,11 @@ describe('createJobStore', () => {
         await jobs.create({
             id: 'job_2',
             conversationState: {},
-            pendingToolCall: { toolCallId: 'call_2', name: 'getWeather', args: { city: 'NYC' } },
+            pendingToolCall: {
+                toolCallId: 'call_2',
+                name: 'getWeather',
+                args: { city: 'NYC' },
+            },
         });
 
         const approved = await jobs.approve('job_2', { city: 'Boston' });
@@ -48,7 +60,11 @@ describe('createJobStore', () => {
         await jobs.create({
             id: 'job_3',
             conversationState: {},
-            pendingToolCall: { toolCallId: 'call_3', name: 'getWeather', args: { city: 'NYC' } },
+            pendingToolCall: {
+                toolCallId: 'call_3',
+                name: 'getWeather',
+                args: { city: 'NYC' },
+            },
         });
 
         const approved = await jobs.approve('job_3');
@@ -61,7 +77,11 @@ describe('createJobStore', () => {
         await jobs.create({
             id: 'job_4',
             conversationState: {},
-            pendingToolCall: { toolCallId: 'call_4', name: 'deleteAccount', args: {} },
+            pendingToolCall: {
+                toolCallId: 'call_4',
+                name: 'deleteAccount',
+                args: {},
+            },
         });
 
         const denied = await jobs.deny('job_4', 'not authorized');

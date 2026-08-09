@@ -29,7 +29,7 @@ export type RunEvalsOptions<Input, Output> = {
 };
 
 export const runEvals = async <Input, Output>(
-    options: RunEvalsOptions<Input, Output>
+    options: RunEvalsOptions<Input, Output>,
 ): Promise<EvalRunSummary<Input, Output>> => {
     const threshold = options.threshold ?? 1;
     const results: EvalResult<Input, Output>[] = [];
@@ -37,7 +37,13 @@ export const runEvals = async <Input, Output>(
     for (const testCase of options.dataset) {
         const actual = await options.run(testCase.input);
         const score = await options.scorer(actual, testCase.expected);
-        results.push({ name: testCase.name, input: testCase.input, expected: testCase.expected, actual, score });
+        results.push({
+            name: testCase.name,
+            input: testCase.input,
+            expected: testCase.expected,
+            actual,
+            score,
+        });
     }
 
     const averageScore = results.length
@@ -52,7 +58,7 @@ export const runEvals = async <Input, Output>(
 // runner, just call this inside a normal test.
 export const assertEvalsPass = <Input, Output>(
     summary: EvalRunSummary<Input, Output>,
-    threshold: number
+    threshold: number,
 ): void => {
     if (summary.averageScore >= threshold) return;
 
@@ -62,6 +68,6 @@ export const assertEvalsPass = <Input, Output>(
         .join(', ');
 
     throw new Error(
-        `Eval average score ${summary.averageScore.toFixed(2)} is below threshold ${threshold}. Failing cases: ${failing}`
+        `Eval average score ${summary.averageScore.toFixed(2)} is below threshold ${threshold}. Failing cases: ${failing}`,
     );
 };

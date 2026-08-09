@@ -62,7 +62,7 @@ describe('Anthropic Provider', () => {
                         'Content-Type': 'application/json',
                     }),
                     body: expect.any(String),
-                })
+                }),
             );
 
             expect(result).toEqual(mockResponse);
@@ -78,7 +78,12 @@ describe('Anthropic Provider', () => {
                 stop_sequence: null,
                 usage: { input_tokens: 10, output_tokens: 5 },
                 content: [
-                    { type: 'tool_use', id: 'toolu_1', name: 'getWeather', input: { location: 'New York' } },
+                    {
+                        type: 'tool_use',
+                        id: 'toolu_1',
+                        name: 'getWeather',
+                        input: { location: 'New York' },
+                    },
                 ],
             };
 
@@ -96,17 +101,26 @@ describe('Anthropic Provider', () => {
                         location: { type: 'string', description: 'City name' },
                     },
                 },
-                execute: vi.fn<() => Promise<typeof mockExecute>>().mockResolvedValue(mockExecute),
+                execute: vi
+                    .fn<() => Promise<typeof mockExecute>>()
+                    .mockResolvedValue(mockExecute),
             });
 
             const result = await anthropic.models.claude.messages({
                 model: 'claude-3-5-sonnet-latest',
-                messages: [{ role: 'user', content: "What's the weather in New York?" }],
+                messages: [
+                    {
+                        role: 'user',
+                        content: "What's the weather in New York?",
+                    },
+                ],
                 max_tokens: 256,
                 tools: [weatherTool],
             });
 
-            expect(weatherTool.execute).toHaveBeenCalledWith({ location: 'New York' });
+            expect(weatherTool.execute).toHaveBeenCalledWith({
+                location: 'New York',
+            });
             expect((result.content[0] as any).result).toEqual(mockExecute);
         });
 
@@ -120,7 +134,12 @@ describe('Anthropic Provider', () => {
                 stop_sequence: null,
                 usage: { input_tokens: 10, output_tokens: 5 },
                 content: [
-                    { type: 'tool_use', id: 'toolu_2', name: 'getLocation', input: {} },
+                    {
+                        type: 'tool_use',
+                        id: 'toolu_2',
+                        name: 'getLocation',
+                        input: {},
+                    },
                 ],
             };
 
@@ -170,10 +189,12 @@ describe('Anthropic Provider', () => {
                 expect.objectContaining({
                     method: 'POST',
                 }),
-                false
+                false,
             );
 
-            expect(handleStreamResponse).toHaveBeenCalledWith(mockStreamResponse);
+            expect(handleStreamResponse).toHaveBeenCalledWith(
+                mockStreamResponse,
+            );
         });
     });
 });

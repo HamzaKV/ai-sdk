@@ -18,7 +18,6 @@ vi.mock('@varlabs/ai/utils/streaming', () => {
     };
 });
 
-
 // Helper to create a mock file/blob for tests
 function createMockFile(name = 'test.mp3', type = 'audio/mpeg', size = 1024) {
     return {
@@ -26,7 +25,9 @@ function createMockFile(name = 'test.mp3', type = 'audio/mpeg', size = 1024) {
         type,
         size,
         lastModified: Date.now(),
-        text: vi.fn<() => Promise<string>>().mockResolvedValue('mock file content'),
+        text: vi
+            .fn<() => Promise<string>>()
+            .mockResolvedValue('mock file content'),
         slice: vi.fn().mockReturnThis(),
     } as unknown as File;
 }
@@ -49,7 +50,13 @@ describe('OpenAI Provider', () => {
         it('should call the embeddings API with correct parameters', async () => {
             const mockResponse = {
                 object: 'list',
-                data: [{ object: 'embedding', embedding: [0.1, 0.2, 0.3], index: 0 }],
+                data: [
+                    {
+                        object: 'embedding',
+                        embedding: [0.1, 0.2, 0.3],
+                        index: 0,
+                    },
+                ],
                 model: 'text-embedding-3-small',
                 usage: { prompt_tokens: 5, total_tokens: 5 },
             };
@@ -58,7 +65,7 @@ describe('OpenAI Provider', () => {
 
             const input = {
                 model: 'text-embedding-3-small',
-                text: 'Test text for embedding'
+                text: 'Test text for embedding',
             };
 
             const result = await openai.models.embedding.embed(input);
@@ -75,7 +82,7 @@ describe('OpenAI Provider', () => {
                         model: input.model,
                         input: input.text,
                     }),
-                })
+                }),
             );
 
             expect(result).toEqual(mockResponse);
@@ -97,8 +104,14 @@ describe('OpenAI Provider', () => {
                             role: 'assistant',
                             status: 'completed',
                             type: 'message',
-                            content: [{ type: 'output_text', text: 'Hello world', annotations: [] }],
-                        }
+                            content: [
+                                {
+                                    type: 'output_text',
+                                    text: 'Hello world',
+                                    annotations: [],
+                                },
+                            ],
+                        },
                     ],
                     usage: {
                         input_tokens: 10,
@@ -136,10 +149,12 @@ describe('OpenAI Provider', () => {
                             'Content-Type': 'application/json',
                         }),
                         body: expect.any(String),
-                    })
+                    }),
                 );
 
-                const bodyParam = JSON.parse(((fetch as Mock<any>).mock as any).calls[0][1].body);
+                const bodyParam = JSON.parse(
+                    ((fetch as Mock<any>).mock as any).calls[0][1].body,
+                );
 
                 expect(bodyParam).toMatchObject({
                     model: input.model,
@@ -181,10 +196,12 @@ describe('OpenAI Provider', () => {
                     expect.objectContaining({
                         method: 'POST',
                     }),
-                    false // Third parameter indicates streaming
+                    false, // Third parameter indicates streaming
                 );
 
-                expect(handleStreamResponse).toHaveBeenCalledWith(mockStreamResponse);
+                expect(handleStreamResponse).toHaveBeenCalledWith(
+                    mockStreamResponse,
+                );
             });
 
             it('should process custom tools correctly', async () => {
@@ -202,7 +219,7 @@ describe('OpenAI Provider', () => {
                             call_id: 'call_123',
                             arguments: '{"location":"New York"}',
                             status: 'completed',
-                        }
+                        },
                     ],
                     usage: {
                         input_tokens: 10,
@@ -221,16 +238,21 @@ describe('OpenAI Provider', () => {
                     parameters: {
                         type: 'object',
                         properties: {
-                            location: { type: 'string', description: 'City name' },
+                            location: {
+                                type: 'string',
+                                description: 'City name',
+                            },
                         },
                         required: ['location'],
                     },
-                    execute: vi.fn<() => Promise<typeof mockExecute>>().mockResolvedValue(mockExecute),
+                    execute: vi
+                        .fn<() => Promise<typeof mockExecute>>()
+                        .mockResolvedValue(mockExecute),
                 });
 
                 const input = {
                     model: 'gpt-4o',
-                    input: 'What\'s the weather in New York?',
+                    input: "What's the weather in New York?",
                     custom_tools: {
                         getWeather: weatherTool,
                     },
@@ -239,7 +261,9 @@ describe('OpenAI Provider', () => {
                 const result = await openai.models.text.create_response(input);
 
                 // Check if tool was added to the request
-                const bodyParam = JSON.parse(((fetch as Mock<any>).mock as any).calls[0][1].body);
+                const bodyParam = JSON.parse(
+                    ((fetch as Mock<any>).mock as any).calls[0][1].body,
+                );
                 expect(bodyParam.tools).toEqual([
                     {
                         type: 'function',
@@ -247,11 +271,13 @@ describe('OpenAI Provider', () => {
                         strict: false,
                         description: 'Get the current weather for a location',
                         parameters: weatherTool.parameters,
-                    }
+                    },
                 ]);
 
                 // Check if tool execution happened and result was added
-                expect(weatherTool.execute).toHaveBeenCalledWith({ location: 'New York' });
+                expect(weatherTool.execute).toHaveBeenCalledWith({
+                    location: 'New York',
+                });
                 // expect(result.output[0].result).toEqual({ temperature: 72, conditions: 'sunny' });
             });
 
@@ -270,7 +296,7 @@ describe('OpenAI Provider', () => {
                             call_id: 'call_124',
                             arguments: '{}',
                             status: 'completed',
-                        }
+                        },
                     ],
                     usage: {
                         input_tokens: 10,
@@ -300,7 +326,9 @@ describe('OpenAI Provider', () => {
                     },
                 });
 
-                const functionCallItem = result.output.find((item: any) => item.type === 'function_call') as any;
+                const functionCallItem = result.output.find(
+                    (item: any) => item.type === 'function_call',
+                ) as any;
                 expect(functionCallItem.result).toBeUndefined();
             });
         });
@@ -324,7 +352,9 @@ describe('OpenAI Provider', () => {
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockResponse);
 
-            const result = await openai.models.text.get_response({ id: 'resp_123' });
+            const result = await openai.models.text.get_response({
+                id: 'resp_123',
+            });
 
             expect(fetch).toHaveBeenCalledWith(
                 `${mockContext.config.baseUrl}/responses/resp_123`,
@@ -333,7 +363,7 @@ describe('OpenAI Provider', () => {
                     headers: expect.objectContaining({
                         Authorization: `Bearer ${mockContext.config.apiKey}`,
                     }),
-                })
+                }),
             );
 
             expect(result).toEqual(mockResponse);
@@ -348,7 +378,9 @@ describe('OpenAI Provider', () => {
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockDeleteResponse);
 
-            const result = await openai.models.text.delete_response({ id: 'resp_123' });
+            const result = await openai.models.text.delete_response({
+                id: 'resp_123',
+            });
 
             expect(fetch).toHaveBeenCalledWith(
                 `${mockContext.config.baseUrl}/responses/resp_123`,
@@ -357,7 +389,7 @@ describe('OpenAI Provider', () => {
                     headers: expect.objectContaining({
                         Authorization: `Bearer ${mockContext.config.apiKey}`,
                     }),
-                })
+                }),
             );
 
             expect(result).toEqual(mockDeleteResponse);
@@ -366,9 +398,7 @@ describe('OpenAI Provider', () => {
         it('should list input items for a response', async () => {
             const mockListResponse = {
                 object: 'list',
-                data: [
-                    { type: 'message', role: 'user', content: 'Hello' }
-                ],
+                data: [{ type: 'message', role: 'user', content: 'Hello' }],
                 first_id: 'msg_1',
                 last_id: 'msg_1',
                 has_more: false,
@@ -376,7 +406,9 @@ describe('OpenAI Provider', () => {
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockListResponse);
 
-            const result = await openai.models.text.list_input_item_list({ id: 'resp_123' });
+            const result = await openai.models.text.list_input_item_list({
+                id: 'resp_123',
+            });
 
             expect(fetch).toHaveBeenCalledWith(
                 `${mockContext.config.baseUrl}/responses/resp_123/input_items`,
@@ -385,7 +417,7 @@ describe('OpenAI Provider', () => {
                     headers: expect.objectContaining({
                         Authorization: `Bearer ${mockContext.config.apiKey}`,
                     }),
-                })
+                }),
             );
 
             expect(result).toEqual(mockListResponse);
@@ -396,9 +428,7 @@ describe('OpenAI Provider', () => {
         it('should create images correctly', async () => {
             const mockImageResponse = {
                 created_at: 1677649,
-                data: [
-                    { url: 'https://example.com/image.jpg' }
-                ],
+                data: [{ url: 'https://example.com/image.jpg' }],
                 usage: {
                     total_tokens: 100,
                     input_tokens: 50,
@@ -406,8 +436,8 @@ describe('OpenAI Provider', () => {
                     input_token_details: {
                         image_tokens: 0,
                         text_tokens: 50,
-                    }
-                }
+                    },
+                },
             };
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockImageResponse);
@@ -439,11 +469,13 @@ describe('OpenAI Provider', () => {
                         'Content-Type': 'application/json',
                     }),
                     body: expect.any(String),
-                })
+                }),
             );
 
             const fetchCalls = vi.mocked(fetch).mock.calls;
-            const bodyParam = JSON.parse((fetchCalls[0][1] as any).body as string);
+            const bodyParam = JSON.parse(
+                (fetchCalls[0][1] as any).body as string,
+            );
 
             expect(bodyParam).toMatchObject({
                 model: 'dall-e-3',
@@ -460,9 +492,7 @@ describe('OpenAI Provider', () => {
         it('should handle image edits correctly', async () => {
             const mockEditResponse = {
                 created_at: 1677649,
-                data: [
-                    { url: 'https://example.com/edited-image.jpg' }
-                ],
+                data: [{ url: 'https://example.com/edited-image.jpg' }],
                 usage: {
                     total_tokens: 100,
                     input_tokens: 50,
@@ -470,8 +500,8 @@ describe('OpenAI Provider', () => {
                     input_token_details: {
                         image_tokens: 25,
                         text_tokens: 25,
-                    }
-                }
+                    },
+                },
             };
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockEditResponse);
@@ -503,7 +533,7 @@ describe('OpenAI Provider', () => {
                         Authorization: `Bearer ${mockContext.config.apiKey}`,
                     }),
                     body: expect.any(FormData),
-                })
+                }),
             );
 
             expect(result).toEqual(mockEditResponse);
@@ -512,9 +542,7 @@ describe('OpenAI Provider', () => {
         it('should handle image variations correctly', async () => {
             const mockVariationResponse = {
                 created_at: 1677649,
-                data: [
-                    { url: 'https://example.com/variation.jpg' }
-                ],
+                data: [{ url: 'https://example.com/variation.jpg' }],
                 usage: {
                     total_tokens: 100,
                     input_tokens: 50,
@@ -522,8 +550,8 @@ describe('OpenAI Provider', () => {
                     input_token_details: {
                         image_tokens: 25,
                         text_tokens: 25,
-                    }
-                }
+                    },
+                },
             };
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockVariationResponse);
@@ -550,7 +578,7 @@ describe('OpenAI Provider', () => {
                         Authorization: `Bearer ${mockContext.config.apiKey}`,
                     }),
                     body: expect.any(FormData),
-                })
+                }),
             );
 
             expect(result).toEqual(mockVariationResponse);
@@ -562,13 +590,17 @@ describe('OpenAI Provider', () => {
             const mockAudioBlob = {
                 size: 1024,
                 type: 'audio/mpeg',
-                text: vi.fn<() => Promise<string>>().mockResolvedValue('audio data'),
+                text: vi
+                    .fn<() => Promise<string>>()
+                    .mockResolvedValue('audio data'),
                 slice: vi.fn(),
             };
 
             const mockResponse = {
                 ok: true,
-                blob: vi.fn<() => Promise<typeof mockAudioBlob>>().mockResolvedValue(mockAudioBlob)
+                blob: vi
+                    .fn<() => Promise<typeof mockAudioBlob>>()
+                    .mockResolvedValue(mockAudioBlob),
             };
 
             (fetch as Mock<any>).mockResolvedValueOnce(mockResponse);
@@ -597,7 +629,7 @@ describe('OpenAI Provider', () => {
                     }),
                     body: JSON.stringify(input),
                 }),
-                false
+                false,
             );
 
             expect(mockResponse.blob).toHaveBeenCalled();
@@ -612,7 +644,9 @@ describe('OpenAI Provider', () => {
                 text: 'Hello world',
             };
 
-            (fetch as Mock<any>).mockResolvedValueOnce(mockTranscriptionResponse);
+            (fetch as Mock<any>).mockResolvedValueOnce(
+                mockTranscriptionResponse,
+            );
 
             const mockFile = createMockFile();
 
@@ -632,7 +666,7 @@ describe('OpenAI Provider', () => {
                     }),
                     body: expect.any(FormData),
                 }),
-                expect.anything()
+                expect.anything(),
             );
 
             expect(result).toEqual(mockTranscriptionResponse);
@@ -663,7 +697,7 @@ describe('OpenAI Provider', () => {
                         'Content-Type': 'multipart/form-data',
                     }),
                     body: expect.any(FormData),
-                })
+                }),
             );
 
             expect(result).toEqual(mockTranslationResponse);

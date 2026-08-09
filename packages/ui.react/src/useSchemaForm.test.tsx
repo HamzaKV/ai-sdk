@@ -17,7 +17,9 @@ describe('useSchemaForm', () => {
     });
 
     it('seeds from initialValues when given (HITL edit-args flow)', () => {
-        const { result } = renderHook(() => useSchemaForm(weatherSchema, { city: 'NYC' }));
+        const { result } = renderHook(() =>
+            useSchemaForm(weatherSchema, { city: 'NYC' }),
+        );
         expect(result.current.values.city).toBe('NYC');
     });
 
@@ -29,7 +31,9 @@ describe('useSchemaForm', () => {
         });
 
         expect(result.current.values.city).toBe('Boston');
-        expect(result.current.fields.find((f) => f.key === 'city')?.value).toBe('Boston');
+        expect(result.current.fields.find((f) => f.key === 'city')?.value).toBe(
+            'Boston',
+        );
     });
 
     it('is invalid until required fields are filled', () => {
@@ -44,7 +48,9 @@ describe('useSchemaForm', () => {
     });
 
     it('resets to defaults', () => {
-        const { result } = renderHook(() => useSchemaForm(weatherSchema, { city: 'NYC' }));
+        const { result } = renderHook(() =>
+            useSchemaForm(weatherSchema, { city: 'NYC' }),
+        );
 
         act(() => {
             result.current.setField('city', 'Boston');

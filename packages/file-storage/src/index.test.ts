@@ -16,9 +16,17 @@ describe('createInMemoryFileStorage', () => {
 
     it('serves uploaded bytes back as a data url', async () => {
         const storage = createInMemoryFileStorage();
-        const { fileId } = await storage.getUploadUrl({ name: 'a.txt', type: 'text/plain', size: 5 });
+        const { fileId } = await storage.getUploadUrl({
+            name: 'a.txt',
+            type: 'text/plain',
+            size: 5,
+        });
 
-        storage.put(fileId, { name: 'a.txt', type: 'text/plain', size: 5 }, new TextEncoder().encode('hello'));
+        storage.put(
+            fileId,
+            { name: 'a.txt', type: 'text/plain', size: 5 },
+            new TextEncoder().encode('hello'),
+        );
 
         const downloadUrl = await storage.getDownloadUrl(fileId);
         expect(downloadUrl).toBe(`data:text/plain;base64,${btoa('hello')}`);
@@ -26,15 +34,23 @@ describe('createInMemoryFileStorage', () => {
 
     it('throws when downloading an unknown fileId', async () => {
         const storage = createInMemoryFileStorage();
-        await expect(storage.getDownloadUrl('missing')).rejects.toThrow('Unknown fileId');
+        await expect(storage.getDownloadUrl('missing')).rejects.toThrow(
+            'Unknown fileId',
+        );
     });
 
     it('deletes files', async () => {
         const storage = createInMemoryFileStorage();
-        const { fileId } = await storage.getUploadUrl({ name: 'a.txt', type: 'text/plain', size: 5 });
+        const { fileId } = await storage.getUploadUrl({
+            name: 'a.txt',
+            type: 'text/plain',
+            size: 5,
+        });
 
         await storage.delete(fileId);
 
-        await expect(storage.getDownloadUrl(fileId)).rejects.toThrow('Unknown fileId');
+        await expect(storage.getDownloadUrl(fileId)).rejects.toThrow(
+            'Unknown fileId',
+        );
     });
 });

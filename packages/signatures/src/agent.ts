@@ -1,8 +1,14 @@
-import type { StructureSpec, InferStructure } from '@varlabs/ai/utils/structure';
+import type {
+    StructureSpec,
+    InferStructure,
+} from '@varlabs/ai/utils/structure';
 import type { Tool } from '@varlabs/ai/utils/tool';
 import type { Signature } from './signature.js';
 
-export type ReActAgentOptions<Input extends StructureSpec, Output extends StructureSpec> = {
+export type ReActAgentOptions<
+    Input extends StructureSpec,
+    Output extends StructureSpec,
+> = {
     signature: Signature<Input, Output>;
     tools?: Record<string, Tool<any, any>>;
     // Plain text completion call, provider-agnostic - wrap whichever provider you use.
@@ -32,13 +38,15 @@ const tryParseToolCall = (text: string): ToolCallInstruction | undefined => {
 const executeTool = async (
     tool: Tool<any, any>,
     args: unknown,
-    onClientToolCall?: ReActAgentOptions<any, any>['onClientToolCall']
+    onClientToolCall?: ReActAgentOptions<any, any>['onClientToolCall'],
 ): Promise<unknown> => {
     if (tool.location === 'server') {
         return tool.execute(args);
     }
     if (!onClientToolCall) {
-        throw new Error(`Tool "${tool.name}" is client-located but no onClientToolCall handler was provided`);
+        throw new Error(
+            `Tool "${tool.name}" is client-located but no onClientToolCall handler was provided`,
+        );
     }
     return onClientToolCall(tool.name, args);
 };
@@ -46,15 +54,19 @@ const executeTool = async (
 // ReAct-style agent: one signature plus a tool set, looped until the model produces the
 // signature's final output (or maxSteps is exceeded). Server tools run inline; client
 // tools are handed to onClientToolCall, the same execution split used by the SDK's providers.
-export const runReActAgent = async <Input extends StructureSpec, Output extends StructureSpec>(
+export const runReActAgent = async <
+    Input extends StructureSpec,
+    Output extends StructureSpec,
+>(
     options: ReActAgentOptions<Input, Output>,
-    input: InferStructure<Input>
+    input: InferStructure<Input>,
 ): Promise<InferStructure<Output>> => {
     const maxSteps = options.maxSteps ?? 5;
     const tools = options.tools ?? {};
-    const toolDescriptions = Object.entries(tools)
-        .map(([name, tool]) => `- ${name}: ${tool.description}`)
-        .join('\n') || '(no tools available)';
+    const toolDescriptions =
+        Object.entries(tools)
+            .map(([name, tool]) => `- ${name}: ${tool.description}`)
+            .join('\n') || '(no tools available)';
 
     const scratchpad: string[] = [];
 
@@ -79,13 +91,23 @@ export const runReActAgent = async <Input extends StructureSpec, Output extends 
 
         const tool = tools[toolCall.tool];
         if (!tool) {
-            scratchpad.push(`Tool "${toolCall.tool}" does not exist. Available tools: ${Object.keys(tools).join(', ')}`);
+            scratchpad.push(
+                `Tool "${toolCall.tool}" does not exist. Available tools: ${Object.keys(tools).join(', ')}`,
+            );
             continue;
         }
 
-        const result = await executeTool(tool, toolCall.args, options.onClientToolCall);
-        scratchpad.push(`Called ${toolCall.tool}(${JSON.stringify(toolCall.args)}) -> ${JSON.stringify(result)}`);
+        const result = await executeTool(
+            tool,
+            toolCall.args,
+            options.onClientToolCall,
+        );
+        scratchpad.push(
+            `Called ${toolCall.tool}(${JSON.stringify(toolCall.args)}) -> ${JSON.stringify(result)}`,
+        );
     }
 
-    throw new Error(`ReAct agent exceeded maxSteps (${maxSteps}) without producing a final answer`);
+    throw new Error(
+        `ReAct agent exceeded maxSteps (${maxSteps}) without producing a final answer`,
+    );
 };
