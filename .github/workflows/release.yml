@@ -1,47 +1,31 @@
 name: Release
 
+# Runs only after the CI workflow completes successfully on main, so a release
+# never happens unless lint, typecheck, unit tests, and builds have passed.
 on:
-  workflow_dispatch:
-    inputs:
-      package:
-        description: 'Package to release'
-        required: true
-        type: choice
-        options:
-          - '@varlabs/ai'
-          - '@varlabs/ai.anthropic'
-          - '@varlabs/ai.openai'
-          - '@varlabs/ai.utils'
-          - '@varlabs/ai.evals'
-          - '@varlabs/ai.file-storage'
-          - '@varlabs/ai.mcp'
-          - '@varlabs/ai.signatures'
-          - '@varlabs/ai.state'
-          - '@varlabs/ai.ui-core'
-          - '@varlabs/ai.ui-react'
-      bump:
-        description: 'Version bump'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
 
 concurrency:
-  group: release-${{ inputs.package }}
+  group: release
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  id-token: write
+  contents: write # push version commits/tags
+  pull-requests: write # open the "Version Packages" PR
+  id-token: write # npm trusted publishing (OIDC)
 
 jobs:
   release:
+    name: Version or Publish
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_branch }}
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
@@ -52,56 +36,26 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: pnpm install --frozen-lockfile
+      # Trusted publishing (OIDC) requires npm >= 11.5.1; Node ships an older npm.
+      # Pinned to the 11.x line, NOT @latest: npm 12.0.0's published tarball drops
+      # the bundled `sigstore` module, breaking any provenance publish (including
+      # OIDC trusted publishing) with `Cannot find module 'sigstore'`.
+      # https://github.com/npm/cli/issues/9722 -- revert to @latest once patched.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@11
 
-      - name: Resolve package directory
-        id: pkg
-        run: |
-          case "${{ inputs.package }}" in
-            '@varlabs/ai') dir='ai' ;;
-            '@varlabs/ai.anthropic') dir='provider.anthropic' ;;
-            '@varlabs/ai.openai') dir='provider.openai' ;;
-            '@varlabs/ai.utils') dir='utils' ;;
-            '@varlabs/ai.evals') dir='evals' ;;
-            '@varlabs/ai.file-storage') dir='file-storage' ;;
-            '@varlabs/ai.mcp') dir='mcp' ;;
-            '@varlabs/ai.signatures') dir='signatures' ;;
-            '@varlabs/ai.state') dir='state' ;;
-            '@varlabs/ai.ui-core') dir='ui.core' ;;
-            '@varlabs/ai.ui-react') dir='ui.react' ;;
-            *) echo "Unknown package: ${{ inputs.package }}"; exit 1 ;;
-          esac
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      # Release-worthiness gate: only bump/tag/publish if the package's own checks pass.
-      - run: pnpm --filter "${{ inputs.package }}" run typecheck
-      - run: pnpm --filter "${{ inputs.package }}" run test
-
-      - name: Bump version
-        id: version
-        working-directory: packages/${{ steps.pkg.outputs.dir }}
-        run: |
-          npm version "${{ inputs.bump }}" --no-git-tag-version
-          version=$(node -p "require('./package.json').version")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "packages/${{ steps.pkg.outputs.dir }}/package.json"
-          git commit -m "release: ${{ inputs.package }}@${{ steps.version.outputs.version }}"
-          git tag "${{ inputs.package }}@${{ steps.version.outputs.version }}"
-
-      - run: pnpm --filter "${{ inputs.package }}" run build
-
-      - name: Push commit and tag
-        run: git push origin HEAD:main "${{ inputs.package }}@${{ steps.version.outputs.version }}"
-
-      # Trusted Publishing (OIDC): no NPM_TOKEN. Requires the package to be linked to this
-      # repo + this workflow file as a Trusted Publisher on npmjs.com, and npm CLI >= 11.5.1.
-      - run: npm install -g npm@latest
-
-      - name: Publish
-        working-directory: packages/${{ steps.pkg.outputs.dir }}/dist
-        run: npm publish --access public
+      # With changesets present -> opens/updates the "Version Packages" PR.
+      # With none remaining (that PR merged) -> runs the publish script.
+      - name: Create Release PR or Publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version-packages
+          publish: bash scripts/release.sh
+          commit: "chore: version packages"
+          title: "chore: version packages"
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
