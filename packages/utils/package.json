@@ -1,7 +1,9 @@
 {
   "name": "@varlabs/ai.utils",
   "version": "1.0.2",
-  "description": "",
+  "description": "Timeout-aware fetch wrappers for server and client environments, used across the AI SDK's provider packages",
+  "author": "HamzaKV <hamzakv333@gmail.com>",
+  "repository": "https://github.com/HamzaKV/ai-sdk.git",
   "type": "module",
   "exports": {
     "./fetch.server": "./src/fetch.server.js",
@@ -25,9 +27,13 @@
     "roll:minor": "pnpm run minor && pnpm run roll",
     "roll:major": "pnpm run major && pnpm run roll"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "ai",
+    "sdk",
+    "typescript",
+    "fetch"
+  ],
+  "license": "MIT",
   "packageManager": "pnpm@10.6.2",
   "devDependencies": {
     "copyfiles": "^2.4.1",
