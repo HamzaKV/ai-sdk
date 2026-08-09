@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to release'
+        required: true
+        type: choice
+        options:
+          - '@varlabs/ai'
+          - '@varlabs/ai.anthropic'
+          - '@varlabs/ai.openai'
+          - '@varlabs/ai.utils'
+          - '@varlabs/ai.evals'
+          - '@varlabs/ai.file-storage'
+          - '@varlabs/ai.mcp'
+          - '@varlabs/ai.signatures'
+          - '@varlabs/ai.state'
+          - '@varlabs/ai.ui-core'
+          - '@varlabs/ai.ui-react'
+      bump:
+        description: 'Version bump'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release-${{ inputs.package }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Resolve package directory
+        id: pkg
+        run: |
+          case "${{ inputs.package }}" in
+            '@varlabs/ai') dir='ai' ;;
+            '@varlabs/ai.anthropic') dir='provider.anthropic' ;;
+            '@varlabs/ai.openai') dir='provider.openai' ;;
+            '@varlabs/ai.utils') dir='utils' ;;
+            '@varlabs/ai.evals') dir='evals' ;;
+            '@varlabs/ai.file-storage') dir='file-storage' ;;
+            '@varlabs/ai.mcp') dir='mcp' ;;
+            '@varlabs/ai.signatures') dir='signatures' ;;
+            '@varlabs/ai.state') dir='state' ;;
+            '@varlabs/ai.ui-core') dir='ui.core' ;;
+            '@varlabs/ai.ui-react') dir='ui.react' ;;
+            *) echo "Unknown package: ${{ inputs.package }}"; exit 1 ;;
+          esac
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      # Release-worthiness gate: only bump/tag/publish if the package's own checks pass.
+      - run: pnpm --filter "${{ inputs.package }}" run typecheck
+      - run: pnpm --filter "${{ inputs.package }}" run test
+
+      - name: Bump version
+        id: version
+        working-directory: packages/${{ steps.pkg.outputs.dir }}
+        run: |
+          npm version "${{ inputs.bump }}" --no-git-tag-version
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "packages/${{ steps.pkg.outputs.dir }}/package.json"
+          git commit -m "release: ${{ inputs.package }}@${{ steps.version.outputs.version }}"
+          git tag "${{ inputs.package }}@${{ steps.version.outputs.version }}"
+
+      - run: pnpm --filter "${{ inputs.package }}" run build
+
+      - name: Push commit and tag
+        run: git push origin HEAD:main "${{ inputs.package }}@${{ steps.version.outputs.version }}"
+
+      # Trusted Publishing (OIDC): no NPM_TOKEN. Requires the package to be linked to this
+      # repo + this workflow file as a Trusted Publisher on npmjs.com, and npm CLI >= 11.5.1.
+      - run: npm install -g npm@latest
+
+      - name: Publish
+        working-directory: packages/${{ steps.pkg.outputs.dir }}/dist
+        run: npm publish --access public
