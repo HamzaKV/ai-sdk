@@ -1,6 +1,10 @@
 import { defineProvider, type ProviderContext } from '@varlabs/ai/provider';
 import fetch from '@varlabs/ai.utils/fetch.server';
-import { handleStreamResponse } from '@varlabs/ai/utils/streaming';
+import {
+    handleStreamResponse,
+    mapToStreamEvents,
+} from '@varlabs/ai/utils/streaming';
+import { mapOpenAiStreamEvent } from './stream-events.js';
 
 type ContentType =
     | {
@@ -62,7 +66,7 @@ type EmbeddingModels =
 
 type ModerationModels = 'omni-moderation-latest';
 
-type TextResponseModels =
+export type TextResponseModels =
     | BaseModels
     | ChatModels
     | ReasoningModels
@@ -507,7 +511,7 @@ type TextResponseType<
     >[];
 };
 
-type StreamResponse<Model extends TextResponseModels> =
+export type StreamResponse<Model extends TextResponseModels> =
     | {
           type:
               | 'response.created'
@@ -1146,8 +1150,9 @@ const openAiProvider = defineProvider({
                     false,
                 );
 
-                return handleStreamResponse<CreateResponseOutput<Model, true>>(
-                    response,
+                return mapToStreamEvents(
+                    handleStreamResponse<StreamResponse<Model>>(response),
+                    mapOpenAiStreamEvent,
                 );
             },
             get_response: async (
