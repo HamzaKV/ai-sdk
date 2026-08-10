@@ -6,7 +6,6 @@ import {
 import { createAIClient } from '@varlabs/ai';
 import openAiProvider from '@varlabs/ai.openai';
 import {
-    mapToStreamEvents,
     createDataStream,
     pipeStreamToResponse,
     type StreamEvent,
@@ -27,28 +26,6 @@ const client = createAIClient({
         }),
     },
 });
-
-// The Responses API's real streaming event shape - not what provider.openai's
-// own types claim for stream_response (see ai-sdk gap-scan notes). Only the
-// two event types this demo cares about are modeled.
-type OpenAiStreamChunk = {
-    type: string;
-    delta?: string;
-};
-
-const mapChunk = (chunk: OpenAiStreamChunk): StreamEvent | undefined => {
-    switch (chunk.type) {
-        case 'response.output_text.delta':
-            return { type: 'text-delta', delta: chunk.delta ?? '' };
-        case 'response.completed':
-        case 'response.incomplete':
-            return { type: 'done' };
-        case 'error':
-            return { type: 'error', message: 'The model stream failed.' };
-        default:
-            return undefined;
-    }
-};
 
 const readJsonBody = async (
     req: IncomingMessage,
@@ -74,19 +51,15 @@ const handleChat = async (req: IncomingMessage, res: ServerResponse) => {
             content: m.content,
         }));
 
-    const rawStream = await client.openai.text.stream_response({
+    // stream_response already yields normalized StreamEvents - no per-app mapping needed.
+    const events = await client.openai.text.stream_response({
         model: 'gpt-4o-mini',
         input,
     });
 
     const stream = createDataStream<StreamEvent>({
         execute: async ({ merge }) => {
-            await merge(
-                mapToStreamEvents(
-                    rawStream as AsyncGenerator<OpenAiStreamChunk>,
-                    mapChunk,
-                ),
-            );
+            await merge(events);
         },
     });
 

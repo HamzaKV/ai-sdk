@@ -26,10 +26,10 @@ Open http://localhost:5173.
 
 ## How it's wired
 
-- `server.ts` - a plain `node:http` server. Calls `client.openai.text.stream_response`,
-  maps OpenAI's raw SSE chunks into the SDK's `StreamEvent` protocol with
-  `mapToStreamEvents`, and pipes them to the browser with `createDataStream` +
-  `pipeStreamToResponse` (both from `@varlabs/ai/utils/streaming`).
+- `server.ts` - a plain `node:http` server. `client.openai.text.stream_response`
+  already yields the SDK's shared `StreamEvent` protocol (normalized internally
+  by `@varlabs/ai.openai/stream-events`), piped to the browser with
+  `createDataStream` + `pipeStreamToResponse` (both from `@varlabs/ai/utils/streaming`).
 - `src/App.tsx` - `useChat` from `ui.react`. Its `streamFn` fetches `/api/chat`
   and reads the SSE response back into `StreamEvent`s with `handleStreamResponse`
   - the same utility the server uses on the way out.
