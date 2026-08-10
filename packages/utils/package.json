@@ -7,7 +7,9 @@
   "type": "module",
   "exports": {
     "./fetch.server": "./src/fetch.server.js",
-    "./fetch.client": "./src/fetch.client.js"
+    "./fetch.client": "./src/fetch.client.js",
+    "./errors": "./src/errors.js",
+    "./retry": "./src/retry.js"
   },
   "scripts": {
     "clean": "rimraf ./dist",
