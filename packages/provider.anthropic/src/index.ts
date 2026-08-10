@@ -1,6 +1,10 @@
 import { defineProvider, type ProviderContext } from '@varlabs/ai/provider';
 import fetch from '@varlabs/ai.utils/fetch.server';
-import { handleStreamResponse } from '@varlabs/ai/utils/streaming';
+import {
+    handleStreamResponse,
+    mapToStreamEvents,
+} from '@varlabs/ai/utils/streaming';
+import { mapAnthropicStreamEvent } from './stream-events.js';
 
 const aiModels = [
     // Claude 4 Models
@@ -586,7 +590,7 @@ type AnthropicResponse = {
     )[];
 };
 
-type AnthropicStreamEvent =
+export type AnthropicStreamEvent =
     | { type: 'message_start'; message: AnthropicResponse }
     | {
           type: 'content_block_start';
@@ -722,7 +726,10 @@ const anthropicProvider = defineProvider({
                     false,
                 );
 
-                return handleStreamResponse<AnthropicStreamEvent>(response);
+                return mapToStreamEvents(
+                    handleStreamResponse<AnthropicStreamEvent>(response),
+                    mapAnthropicStreamEvent,
+                );
             },
         },
     },

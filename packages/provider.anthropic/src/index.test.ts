@@ -10,8 +10,11 @@ vi.mock('@varlabs/ai.utils/fetch.server', () => {
     };
 });
 
-vi.mock('@varlabs/ai/utils/streaming', () => {
+vi.mock('@varlabs/ai/utils/streaming', async (importOriginal) => {
+    const actual =
+        await importOriginal<typeof import('@varlabs/ai/utils/streaming')>();
     return {
+        ...actual,
         handleStreamResponse: vi.fn((response) => response),
     };
 });
