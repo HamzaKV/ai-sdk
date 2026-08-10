@@ -2,6 +2,10 @@
 // so downstream consumers (ui.core, signatures) never see provider-specific shapes.
 export type StreamEvent =
     | { type: 'text-delta'; delta: string }
+    | { type: 'reasoning-delta'; delta: string }
+    // Providers may emit this more than once, each time with only the fields
+    // they know at that point in the stream - merge/replace rather than expecting one final total.
+    | { type: 'usage'; inputTokens?: number; outputTokens?: number }
     | {
           type: 'client-tool-call';
           toolCallId: string;
