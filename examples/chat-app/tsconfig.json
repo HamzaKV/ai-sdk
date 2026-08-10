@@ -1,21 +1,9 @@
 {
+    "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "lib": ["ESNext", "DOM"],
-        "module": "ESNext",
-        "target": "ESNext",
-        "moduleDetection": "force",
-        "jsx": "react-jsx",
-
-        "moduleResolution": "bundler",
-        "verbatimModuleSyntax": true,
-        "noEmit": true,
         "baseUrl": ".",
-        "resolveJsonModule": true,
-        "esModuleInterop": true,
-
-        "strict": true,
-        "skipLibCheck": true,
-        "noFallthroughCasesInSwitch": true
+        "jsx": "react-jsx",
+        "noEmit": true
     },
     "include": ["src/**/*", "server.ts", "vite.config.ts"]
 }
