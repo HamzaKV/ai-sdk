@@ -14,6 +14,15 @@ export type Middleware = <Input>(
     | false
     | Promise<MiddlewareContext<Input> | false>;
 
+// Observes a completed call - the resolved value for non-stream calls, or the
+// (not-yet-iterated) AsyncGenerator for stream calls. Only runs on success;
+// does not see or transform the output. For per-chunk visibility into a
+// stream, consume the generator itself (or use ui.core's onChunk middleware).
+export type ResponseMiddleware = (
+    ctx: MiddlewareContext,
+    output: unknown,
+) => void | Promise<void>;
+
 type ProviderInstance = ReturnType<ReturnType<typeof defineProvider>>;
 
 type ProviderMap = Record<string, ProviderInstance>;
@@ -21,6 +30,7 @@ type ProviderMap = Record<string, ProviderInstance>;
 interface CreateAIClientOptions<TProviders extends ProviderMap> {
     providers: TProviders;
     middleware?: Middleware[];
+    onResponse?: ResponseMiddleware[];
 }
 
 type AIClient<TProviders extends ProviderMap> = {
@@ -30,7 +40,7 @@ type AIClient<TProviders extends ProviderMap> = {
 export const createAIClient = <TProviders extends ProviderMap>(
     options: CreateAIClientOptions<TProviders>,
 ) => {
-    const { providers, middleware = [] } = options;
+    const { providers, middleware = [], onResponse = [] } = options;
 
     // Initialize the client object
     const client = {} as AIClient<TProviders>;
@@ -78,7 +88,11 @@ export const createAIClient = <TProviders extends ProviderMap>(
                     if (!ctx) {
                         throw new Error('Middleware stopped execution');
                     }
-                    return callFn(ctx.input, override);
+                    const output = await callFn(ctx.input, override);
+                    for (const hook of onResponse) {
+                        await hook(ctx, output);
+                    }
+                    return output;
                 };
             }
 
