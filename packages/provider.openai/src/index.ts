@@ -4,6 +4,10 @@ import {
     handleStreamResponse,
     mapToStreamEvents,
 } from '@varlabs/ai/utils/streaming';
+import type {
+    JsonSchemaParameters as ToolParameters,
+    InferJsonSchemaParameters as InferToolParameters,
+} from '@varlabs/ai/utils/json-schema';
 import { mapOpenAiStreamEvent } from './stream-events.js';
 
 type ContentType =
@@ -142,73 +146,6 @@ type FunctionToolType = {
     description?: string;
     parameters: ToolParameters;
 };
-
-type ToolParameterBase = {
-    type: 'string' | 'number' | 'boolean';
-    description?: string;
-    required?: boolean;
-};
-
-type ToolParameterArray = {
-    type: 'array';
-    items: (ToolParameterBase | ToolParameterObject | ToolParameterArray)[];
-    description?: string;
-    required?: boolean;
-};
-
-type ToolParameterObject = {
-    type: 'object';
-    properties: Record<
-        string,
-        ToolParameterObject | ToolParameterBase | ToolParameterArray
-    >;
-    description?: string;
-    required?: boolean;
-};
-
-type ToolParameters = {
-    type: 'object';
-    properties: Record<
-        string,
-        ToolParameterObject | ToolParameterBase | ToolParameterArray
-    >;
-    additionalProperties?: boolean;
-};
-
-type InferParameter<T> = T extends { type: 'string' }
-    ? string
-    : T extends { type: 'number' }
-      ? number
-      : T extends { type: 'boolean' }
-        ? boolean
-        : T extends { type: 'array'; items: infer Items }
-          ? InferArray<Items>
-          : T extends { type: 'object'; properties: infer Properties }
-            ? Properties extends Record<string, any>
-                ? InferObject<Properties>
-                : never
-            : never;
-
-type InferArray<T> = T extends (infer U)[] ? InferParameter<U>[] : never;
-
-type InferObject<T extends Record<string, any>> = {
-    [K in keyof T as T[K]['required'] extends true ? K : never]: InferParameter<
-        T[K]
-    >;
-} & {
-    [K in keyof T as T[K]['required'] extends true
-        ? never
-        : K]?: InferParameter<T[K]>;
-};
-
-// Final inference type
-type InferToolParameters<T extends ToolParameters> = T extends {
-    properties: infer Props;
-}
-    ? Props extends Record<string, any>
-        ? InferObject<Props>
-        : never
-    : never;
 
 type CustomToolBase<TParams extends ToolParameters> = {
     description?: string;

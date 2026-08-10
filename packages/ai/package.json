@@ -12,6 +12,7 @@
     "./utils/cosine": "./src/utils/cosine.js",
     "./utils/streaming": "./src/utils/streaming.js",
     "./utils/structure": "./src/utils/structure.js",
+    "./utils/json-schema": "./src/utils/json-schema.js",
     "./utils/tool": "./src/utils/tool.js"
   },
   "scripts": {
