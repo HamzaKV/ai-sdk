@@ -146,9 +146,16 @@ export const createDataStream = <T = unknown>(options: {
     return stream;
 };
 
-export const pipeStreamToResponse = async <T, S extends Response>(
+// Minimal shape of a Node.js http.ServerResponse - avoids depending on @types/node here.
+type NodeWritableResponse = {
+    write: (chunk: Uint8Array) => unknown;
+    end: () => unknown;
+    setHeader: (name: string, value: string) => unknown;
+};
+
+export const pipeStreamToResponse = async (
     stream: ReadableStream<Uint8Array>,
-    res: S,
+    res: Response | NodeWritableResponse,
     options?: {
         onError?: (err: Error) => string;
         onClose?: () => void;

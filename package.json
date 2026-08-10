@@ -6,11 +6,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -r run build",
-    "test": "pnpm -r run test",
+    "build": "pnpm -r --if-present run build",
+    "test": "pnpm -r --if-present run test",
     "test:contract": "pnpm --filter @varlabs/ai.anthropic --filter @varlabs/ai.openai run test:contract",
-    "typecheck": "pnpm -r run typecheck",
-    "coverage": "pnpm -r run coverage",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "coverage": "pnpm -r --if-present run coverage",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:ci": "biome ci .",

@@ -32,7 +32,9 @@ import openAiProvider from '@varlabs/ai.openai';
 
 const client = createAIClient({
   providers: {
-    openai: openAiProvider({ config: { apiKey: 'your-api-key' } }),
+    openai: openAiProvider({
+      config: { apiKey: 'your-api-key', baseUrl: 'https://api.openai.com/v1' },
+    }),
   },
 });
 
@@ -43,6 +45,10 @@ const response = await client.openai.text.create_response({
 ```
 
 See each package's README (linked above) for its full API. [`@varlabs/ai`](./packages/ai/README.md) covers provider definition, middleware, and streaming/structure/tool utilities in more depth.
+
+## Examples
+
+[`examples/chat-app`](./examples/chat-app) is a minimal, runnable end-to-end chat app wiring the core, a provider, and both UI packages together over real streaming.
 
 ## Development
 
