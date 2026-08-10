@@ -424,24 +424,24 @@ type AnthropicMessagesInput = {
     thinking?:
         | {
               budget_tokens: number;
-              type: true;
+              type: 'enabled';
           }
         | {
-              type: false;
+              type: 'disabled';
           };
     tool_choice?:
         | {
               type: 'auto';
-              disable_parallel_tool_user?: boolean;
+              disable_parallel_tool_use?: boolean;
           }
         | {
               type: 'any';
-              disable_parallel_tool_user?: boolean;
+              disable_parallel_tool_use?: boolean;
           }
         | {
               name: string;
               type: 'tool';
-              disable_parallel_tool_user?: boolean;
+              disable_parallel_tool_use?: boolean;
           }
         | {
               type: 'none';
@@ -586,6 +586,36 @@ type AnthropicResponse = {
     )[];
 };
 
+type AnthropicStreamEvent =
+    | { type: 'message_start'; message: AnthropicResponse }
+    | {
+          type: 'content_block_start';
+          index: number;
+          content_block: AnthropicResponse['content'][number];
+      }
+    | {
+          type: 'content_block_delta';
+          index: number;
+          delta:
+              | { type: 'text_delta'; text: string }
+              | { type: 'input_json_delta'; partial_json: string }
+              | { type: 'thinking_delta'; thinking: string }
+              | { type: 'signature_delta'; signature: string }
+              | { type: 'citations_delta'; citation: Citation };
+      }
+    | { type: 'content_block_stop'; index: number }
+    | {
+          type: 'message_delta';
+          delta: {
+              stop_reason: AnthropicResponse['stop_reason'] | null;
+              stop_sequence: string | null;
+          };
+          usage: { output_tokens: number };
+      }
+    | { type: 'message_stop' }
+    | { type: 'ping' }
+    | { type: 'error'; error: { type: string; message: string } };
+
 type AnthropicConfig = {
     apiKey: string;
     baseUrl: string;
@@ -692,7 +722,7 @@ const anthropicProvider = defineProvider({
                     false,
                 );
 
-                return handleStreamResponse<AnthropicResponse>(response);
+                return handleStreamResponse<AnthropicStreamEvent>(response);
             },
         },
     },

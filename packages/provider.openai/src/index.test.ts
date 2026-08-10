@@ -620,7 +620,7 @@ describe('OpenAI Provider', () => {
             });
 
             expect(fetch).toHaveBeenCalledWith(
-                `${mockContext.config.baseUrl}/audio/generations`,
+                `${mockContext.config.baseUrl}/audio/speech`,
                 expect.objectContaining({
                     method: 'POST',
                     headers: expect.objectContaining({

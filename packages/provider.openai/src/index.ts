@@ -100,7 +100,6 @@ type ReasoningOptionType = {
     summary: 'auto' | 'concise' | 'detailed';
     encrypted_content?: string;
 };
-1;
 
 type FileSearchToolType = {
     type: 'file_search';
@@ -685,7 +684,7 @@ type ImageEditInput<Model extends Exclude<ImageGenerationModels, 'dall-e-3'>> =
 type ImageVariationInput = {
     image: FileLike;
     n?: ImageCreateInput<'dall-e-2'>['n'];
-    repsonse_format?: ImageCreateInput<'dall-e-2'>['response_format'];
+    response_format?: ImageCreateInput<'dall-e-2'>['response_format'];
     size?: ImageCreateInput<'dall-e-2'>['size'];
     user?: string;
 };
@@ -1318,8 +1317,8 @@ const openAiProvider = defineProvider({
                 if (input.n) {
                     formData.append('n', input.n.toString());
                 }
-                if (input.repsonse_format) {
-                    formData.append('response_format', input.repsonse_format);
+                if (input.response_format) {
+                    formData.append('response_format', input.response_format);
                 }
                 if (input.size) {
                     formData.append('size', input.size);
@@ -1358,7 +1357,7 @@ const openAiProvider = defineProvider({
                     pcm: 'audio/pcm',
                 } as const;
                 const response = await fetch<Response, false>(
-                    `${ctx.config.baseUrl}/audio/generations`,
+                    `${ctx.config.baseUrl}/audio/speech`,
                     {
                         method: 'POST',
                         headers: {
