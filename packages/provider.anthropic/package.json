@@ -17,16 +17,7 @@
         "test": "vitest run --exclude \"**/*.contract.test.ts\"",
         "test:watch": "vitest",
         "test:contract": "vitest run src/index.contract.test.ts",
-        "coverage": "vitest run --coverage",
-        "git:main": "git checkout \"main\"",
-        "git:push:main": "git push -u origin \"main\" --tags",
-        "patch": "pnpm run git:main && npm version patch && pnpm run git:push:main",
-        "minor": "pnpm run git:main && npm version minor && pnpm run git:push:main",
-        "major": "pnpm run git:main && npm version major && pnpm run git:push:main",
-        "roll": "pnpm run build && cd dist && npm publish",
-        "roll:patch": "pnpm run patch && pnpm run roll",
-        "roll:minor": "pnpm run minor && pnpm run roll",
-        "roll:major": "pnpm run major && pnpm run roll"
+        "coverage": "vitest run --coverage"
     },
     "packageManager": "pnpm@10.6.2",
     "devDependencies": {

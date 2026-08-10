@@ -47,7 +47,7 @@ if [ ${#to_publish[@]} -eq 0 ]; then
 fi
 
 # Build only when there is something to publish.
-pnpm -r run build
+pnpm -r --if-present run build
 
 for dir in "${to_publish[@]}"; do
     name=$(node -p "require('./${dir}/package.json').name")
