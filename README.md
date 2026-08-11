@@ -11,7 +11,7 @@ This is a pnpm workspace monorepo. Each package publishes independently to npm u
 | [`@varlabs/ai`](./packages/ai) | Core: `createAIClient`, `defineProvider`, streaming/structure/tool utilities |
 | [`@varlabs/ai.anthropic`](./packages/provider.anthropic) | Anthropic provider |
 | [`@varlabs/ai.openai`](./packages/provider.openai) | OpenAI provider |
-| [`@varlabs/ai.utils`](./packages/utils) | Timeout-aware fetch wrappers used across provider packages |
+| [`@varlabs/ai.utils`](./packages/utils) | Timeout-aware fetch wrappers, error taxonomy, and retry helper used across provider packages |
 | [`@varlabs/ai.evals`](./packages/evals) | Dataset regression evals: pluggable scorers that compose with your own vitest suite |
 | [`@varlabs/ai.signatures`](./packages/signatures) | DSPy/ax-style typed signatures and a ReAct agent loop |
 | [`@varlabs/ai.mcp`](./packages/mcp) | MCP client: connects to remote MCP servers and converts their tools into SDK tools |

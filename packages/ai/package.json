@@ -1,7 +1,7 @@
 {
   "name": "@varlabs/ai",
   "version": "0.1.2",
-  "description": "AI sdk for interfacing with AI models",
+  "description": "Core: provider definition, middleware, streaming/structure/tool utilities",
   "author": "HamzaKV <hamzakv333@gmail.com>",
   "repository": "https://github.com/HamzaKV/ai-sdk.git",
   "license": "MIT",
