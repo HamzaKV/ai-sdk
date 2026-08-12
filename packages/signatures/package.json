@@ -1,6 +1,6 @@
 {
     "name": "@varlabs/ai.signatures",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "DSPy/ax-style typed signatures and a ReAct agent loop for the AI SDK",
     "author": "HamzaKV <hamzakv333@gmail.com>",
     "repository": "https://github.com/HamzaKV/ai-sdk.git",
