@@ -24,9 +24,30 @@ async function* streamFn(messages: ChatMessage[]): AsyncGenerator<StreamEvent> {
     yield* handleStreamResponse<StreamEvent>(res);
 }
 
+// Executed in the browser as soon as the model calls it - no approval needed (see
+// server.ts's getLocation, registered with approval: 'auto'). Stand-in for a real
+// navigator.geolocation call, kept deterministic for the example.
+const getLocation = async () => ({ city: 'San Francisco' });
+
+// Also executed in the browser, but only once the user clicks Approve below - ui.core calls
+// this from approve(), not when the model first calls the tool (see server.ts's
+// deleteAccount, registered with approval: 'required'). Demo only - doesn't delete anything.
+const deleteAccount = async () => ({ ok: true });
+
 export function App() {
-    const { messages, status, input, handleInputChange, handleSubmit } =
-        useChat({ streamFn });
+    const {
+        messages,
+        status,
+        pendingApproval,
+        input,
+        handleInputChange,
+        handleSubmit,
+        approve,
+        deny,
+    } = useChat({
+        streamFn,
+        clientTools: { getLocation, deleteAccount },
+    });
 
     return (
         <main className='chat'>
@@ -41,17 +62,43 @@ export function App() {
                 {status === 'error' && (
                     <p className='status status-error'>Something went wrong.</p>
                 )}
+                {status === 'awaiting-approval' && pendingApproval && (
+                    <div className='approval'>
+                        <p>
+                            Approve <strong>{pendingApproval.name}</strong> with
+                            args{' '}
+                            <code>{JSON.stringify(pendingApproval.args)}</code>?
+                        </p>
+                        <button type='button' onClick={() => approve()}>
+                            Approve
+                        </button>
+                        <button
+                            type='button'
+                            onClick={() => deny('User declined')}
+                        >
+                            Deny
+                        </button>
+                    </div>
+                )}
             </div>
             <form onSubmit={handleSubmit}>
                 <input
                     value={input}
                     onChange={handleInputChange}
-                    disabled={status === 'streaming'}
-                    placeholder='Ask something…'
+                    disabled={
+                        status === 'streaming' || status === 'awaiting-approval'
+                    }
+                    placeholder={
+                        'Ask something… (try "what\'s the weather in Boston?" or "delete my account")'
+                    }
                 />
                 <button
                     type='submit'
-                    disabled={status === 'streaming' || !input.trim()}
+                    disabled={
+                        status === 'streaming' ||
+                        status === 'awaiting-approval' ||
+                        !input.trim()
+                    }
                 >
                     Send
                 </button>

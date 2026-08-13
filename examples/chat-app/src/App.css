@@ -37,6 +37,18 @@ body {
     color: #c0392b;
 }
 
+.approval {
+    border: 1px solid #e0a800;
+    background: #fff8e1;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+}
+
+.approval button {
+    margin-right: 0.5rem;
+}
+
 form {
     display: flex;
     gap: 0.5rem;
