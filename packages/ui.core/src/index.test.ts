@@ -183,6 +183,88 @@ describe('createChatCore', () => {
         expect(chat.getState().pendingApproval).toBeUndefined();
     });
 
+    it('records toolCalls on the assistant message and replays them (plus sibling results) on resume', async () => {
+        const streamFn = vi
+            .fn()
+            .mockReturnValueOnce(
+                gen([
+                    {
+                        type: 'hitl-pending',
+                        jobId: 'job_1',
+                        toolCallId: 'call_2',
+                        name: 'deleteAccount',
+                        args: { id: 42 },
+                        siblingResults: [
+                            {
+                                toolCallId: 'call_1',
+                                name: 'getWeather',
+                                args: { location: 'NYC' },
+                                result: { temperature: 72 },
+                            },
+                        ],
+                    },
+                ]),
+            )
+            .mockReturnValueOnce(
+                gen([{ type: 'text-delta', delta: 'Done' }, { type: 'done' }]),
+            );
+
+        const deleteAccount = vi.fn().mockResolvedValue({ ok: true });
+        const chat = createChatCore({
+            streamFn,
+            clientTools: { deleteAccount },
+        });
+
+        await chat.sendMessage('do stuff');
+
+        const assistantMessage = chat
+            .getState()
+            .messages.find((m) => m.role === 'assistant');
+        expect(assistantMessage?.toolCalls).toEqual([
+            {
+                toolCallId: 'call_1',
+                name: 'getWeather',
+                args: { location: 'NYC' },
+            },
+            { toolCallId: 'call_2', name: 'deleteAccount', args: { id: 42 } },
+        ]);
+        const siblingResultMessage = chat
+            .getState()
+            .messages.find((m) => m.toolCallId === 'call_1');
+        expect(siblingResultMessage?.content).toBe(
+            JSON.stringify({ temperature: 72 }),
+        );
+
+        await chat.approve();
+
+        // ui.core appends a fresh empty assistant placeholder before invoking streamFn for the
+        // resumed turn - filter it out, same as examples/chat-app's server.ts does.
+        const resumedMessages: ChatMessage[] = streamFn.mock.calls[1][0].filter(
+            (m: ChatMessage) =>
+                m.content.trim().length > 0 ||
+                m.role === 'tool' ||
+                (m.toolCalls?.length ?? 0) > 0,
+        );
+        // [..., assistant(toolCalls), tool(call_1 sibling result), tool(call_2 approve result)]
+        expect(resumedMessages.at(-3)).toMatchObject({
+            role: 'assistant',
+            toolCalls: [
+                { toolCallId: 'call_1', name: 'getWeather' },
+                { toolCallId: 'call_2', name: 'deleteAccount' },
+            ],
+        });
+        expect(resumedMessages.at(-2)).toMatchObject({
+            role: 'tool',
+            toolCallId: 'call_1',
+            content: JSON.stringify({ temperature: 72 }),
+        });
+        expect(resumedMessages.at(-1)).toMatchObject({
+            role: 'tool',
+            toolCallId: 'call_2',
+            content: JSON.stringify({ ok: true }),
+        });
+    });
+
     it('lets approve() edit the tool args before executing', async () => {
         const streamFn = vi
             .fn()

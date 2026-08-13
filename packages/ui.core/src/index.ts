@@ -11,6 +11,10 @@ export type ChatMessage = {
     role: 'user' | 'assistant' | 'tool';
     content: string;
     toolCallId?: string;
+    // Tool calls this assistant message made, if any - needed to replay a valid turn back to
+    // the provider on resume (approve/deny), since providers require the original tool_use /
+    // function_call block(s) to be echoed alongside each matching tool-role result.
+    toolCalls?: { toolCallId: string; name: string; args: unknown }[];
 };
 
 export type ChatStatus = 'idle' | 'streaming' | 'awaiting-approval' | 'error';
@@ -104,6 +108,36 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
         setState({ messages });
     };
 
+    // client-tool-call/hitl-pending carry the sibling server-tool calls from the same round
+    // (see StreamEvent.siblingResults) - the assistant message needs all of them recorded so a
+    // resumed turn can replay the full round, not just the paused/auto-executed call.
+    const toolCallsFromEvent = (event: {
+        toolCallId: string;
+        name: string;
+        args: unknown;
+        siblingResults?: { toolCallId: string; name: string; args: unknown }[];
+    }): ChatMessage['toolCalls'] => [
+        ...(event.siblingResults ?? []).map(({ toolCallId, name, args }) => ({
+            toolCallId,
+            name,
+            args,
+        })),
+        { toolCallId: event.toolCallId, name: event.name, args: event.args },
+    ];
+
+    const appendSiblingResults = (
+        siblingResults?: { toolCallId: string; result: unknown }[],
+    ) => {
+        for (const sibling of siblingResults ?? []) {
+            upsertMessage({
+                id: generateId(),
+                role: 'tool',
+                toolCallId: sibling.toolCallId,
+                content: JSON.stringify(sibling.result),
+            });
+        }
+    };
+
     const runTurn = async (): Promise<void> => {
         setState({ status: 'streaming', error: undefined });
 
@@ -151,6 +185,13 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
                     });
                     return;
                 }
+                assistant = {
+                    ...assistant,
+                    toolCalls: toolCallsFromEvent(event),
+                };
+                upsertMessage(assistant);
+                appendSiblingResults(event.siblingResults);
+
                 const result = await executor(event.args);
                 upsertMessage({
                     id: generateId(),
@@ -162,6 +203,13 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
             }
 
             if (event.type === 'hitl-pending') {
+                assistant = {
+                    ...assistant,
+                    toolCalls: toolCallsFromEvent(event),
+                };
+                upsertMessage(assistant);
+                appendSiblingResults(event.siblingResults);
+
                 await jobStore.create({
                     id: event.jobId,
                     conversationState: state.messages,
