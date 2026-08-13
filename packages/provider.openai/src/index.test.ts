@@ -314,6 +314,7 @@ describe('OpenAI Provider', () => {
 
                 const locationTool = customTool({
                     location: 'client',
+                    approval: 'auto',
                     description: "Get the user's current location",
                     parameters: {
                         type: 'object',
@@ -333,6 +334,246 @@ describe('OpenAI Provider', () => {
                     (item: any) => item.type === 'function_call',
                 ) as any;
                 expect(functionCallItem.result).toBeUndefined();
+            });
+        });
+
+        describe('stream_response - tool loop', () => {
+            // handleStreamResponse is mocked as identity above, so each "response" here is
+            // itself an async iterable of raw StreamResponse events, bypassing real SSE parsing.
+            async function* events(...items: any[]) {
+                for (const item of items) yield item;
+            }
+
+            it('executes a server tool mid-stream and continues via previous_response_id', async () => {
+                (fetch as Mock<any>)
+                    .mockResolvedValueOnce(
+                        events({
+                            type: 'response.completed',
+                            response: {
+                                id: 'resp_1',
+                                output: [
+                                    {
+                                        id: 'func_1',
+                                        type: 'function_call',
+                                        name: 'getWeather',
+                                        call_id: 'call_1',
+                                        arguments: '{"location":"NYC"}',
+                                        status: 'completed',
+                                    },
+                                ],
+                                usage: { input_tokens: 10, output_tokens: 5 },
+                            },
+                        }),
+                    )
+                    .mockResolvedValueOnce(
+                        events(
+                            {
+                                type: 'response.output_text.delta',
+                                delta: "It's sunny.",
+                            },
+                            {
+                                type: 'response.completed',
+                                response: {
+                                    id: 'resp_2',
+                                    output: [
+                                        {
+                                            id: 'msg_1',
+                                            type: 'message',
+                                            role: 'assistant',
+                                            status: 'completed',
+                                            content: [
+                                                {
+                                                    type: 'output_text',
+                                                    text: "It's sunny.",
+                                                    annotations: [],
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                    usage: {
+                                        input_tokens: 15,
+                                        output_tokens: 10,
+                                    },
+                                },
+                            },
+                        ),
+                    );
+
+                const mockExecute = { temperature: 72, conditions: 'sunny' };
+                const weatherTool = customTool({
+                    location: 'server',
+                    description: 'Get the current weather for a location',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            location: {
+                                type: 'string',
+                                description: 'City name',
+                            },
+                        },
+                    },
+                    execute: vi
+                        .fn<() => Promise<typeof mockExecute>>()
+                        .mockResolvedValue(mockExecute),
+                });
+
+                const generator = await openai.models.text.stream_response({
+                    model: 'gpt-4o',
+                    input: "What's the weather in NYC?",
+                    custom_tools: { getWeather: weatherTool },
+                });
+
+                const received: any[] = [];
+                for await (const event of generator) received.push(event);
+
+                expect(weatherTool.execute).toHaveBeenCalledWith({
+                    location: 'NYC',
+                });
+                expect(fetch).toHaveBeenCalledTimes(2);
+
+                const secondCallBody = JSON.parse(
+                    ((fetch as Mock<any>).mock as any).calls[1][1].body,
+                );
+                expect(secondCallBody.previous_response_id).toBe('resp_1');
+                expect(secondCallBody.input).toEqual([
+                    {
+                        call_id: 'call_1',
+                        type: 'function_call_output',
+                        output: JSON.stringify(mockExecute),
+                    },
+                ]);
+
+                expect(received.filter((e) => e.type === 'done')).toHaveLength(
+                    1,
+                );
+                expect(received).toContainEqual({
+                    type: 'text-delta',
+                    delta: "It's sunny.",
+                });
+            });
+
+            it('emits hitl-pending for a client tool requiring approval, without a follow-up request', async () => {
+                (fetch as Mock<any>).mockResolvedValueOnce(
+                    events({
+                        type: 'response.completed',
+                        response: {
+                            id: 'resp_3',
+                            output: [
+                                {
+                                    id: 'func_2',
+                                    type: 'function_call',
+                                    name: 'getLocation',
+                                    call_id: 'call_2',
+                                    arguments: '{}',
+                                    status: 'completed',
+                                },
+                            ],
+                            usage: { input_tokens: 10, output_tokens: 5 },
+                        },
+                    }),
+                );
+
+                const locationTool = customTool({
+                    location: 'client',
+                    approval: 'required',
+                    description: "Get the user's current location",
+                    parameters: { type: 'object', properties: {} },
+                });
+
+                const generator = await openai.models.text.stream_response({
+                    model: 'gpt-4o',
+                    input: 'Where am I?',
+                    custom_tools: { getLocation: locationTool },
+                });
+
+                const received: any[] = [];
+                for await (const event of generator) received.push(event);
+
+                expect(fetch).toHaveBeenCalledTimes(1);
+                const pending = received.find((e) => e.type === 'hitl-pending');
+                expect(pending).toMatchObject({
+                    type: 'hitl-pending',
+                    toolCallId: 'call_2',
+                    name: 'getLocation',
+                    args: {},
+                });
+                expect(typeof pending.jobId).toBe('string');
+            });
+
+            it('falls back to full-input replay when store is false', async () => {
+                (fetch as Mock<any>)
+                    .mockResolvedValueOnce(
+                        events({
+                            type: 'response.completed',
+                            response: {
+                                id: 'resp_4',
+                                output: [
+                                    {
+                                        id: 'func_3',
+                                        type: 'function_call',
+                                        name: 'getWeather',
+                                        call_id: 'call_3',
+                                        arguments: '{"location":"NYC"}',
+                                        status: 'completed',
+                                    },
+                                ],
+                                usage: { input_tokens: 10, output_tokens: 5 },
+                            },
+                        }),
+                    )
+                    .mockResolvedValueOnce(
+                        events({
+                            type: 'response.completed',
+                            response: {
+                                id: 'resp_5',
+                                output: [],
+                                usage: { input_tokens: 15, output_tokens: 10 },
+                            },
+                        }),
+                    );
+
+                const weatherTool = customTool({
+                    location: 'server',
+                    description: 'Get the current weather for a location',
+                    parameters: { type: 'object', properties: {} },
+                    execute: vi.fn().mockResolvedValue({ temperature: 72 }),
+                });
+
+                const generator = await openai.models.text.stream_response({
+                    model: 'gpt-4o',
+                    input: "What's the weather in NYC?",
+                    store: false,
+                    custom_tools: { getWeather: weatherTool },
+                });
+
+                for await (const _event of generator) {
+                    // drain
+                }
+
+                const secondCallBody = JSON.parse(
+                    ((fetch as Mock<any>).mock as any).calls[1][1].body,
+                );
+                expect(secondCallBody.previous_response_id).toBeUndefined();
+                expect(secondCallBody.input).toEqual([
+                    {
+                        type: 'message',
+                        role: 'user',
+                        content: "What's the weather in NYC?",
+                    },
+                    {
+                        id: 'func_3',
+                        type: 'function_call',
+                        name: 'getWeather',
+                        call_id: 'call_3',
+                        arguments: '{"location":"NYC"}',
+                        status: 'completed',
+                    },
+                    {
+                        call_id: 'call_3',
+                        type: 'function_call_output',
+                        output: JSON.stringify({ temperature: 72 }),
+                    },
+                ]);
             });
         });
 

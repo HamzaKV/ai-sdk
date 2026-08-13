@@ -2,7 +2,8 @@ import { defineProvider, type ProviderContext } from '@varlabs/ai/provider';
 import fetch from '@varlabs/ai.utils/fetch.server';
 import {
     handleStreamResponse,
-    mapToStreamEvents,
+    type StreamEvent,
+    type SiblingToolResult,
 } from '@varlabs/ai/utils/streaming';
 import type {
     JsonSchemaParameters as ToolParameters,
@@ -158,7 +159,10 @@ type CustomTool<TParams extends ToolParameters = any, TResult = any> =
           location: 'server';
           execute: (args: InferToolParameters<TParams>) => Promise<TResult>;
       })
-    | (CustomToolBase<TParams> & { location: 'client' });
+    | (CustomToolBase<TParams> & {
+          location: 'client';
+          approval: 'auto' | 'required';
+      });
 
 export const customTool = <T extends CustomTool<any, any>>(tool: T): T => {
     return tool;
@@ -813,6 +817,315 @@ type OpenAiConfig = {
     fetchTimeout?: number;
 };
 
+// Bounds the mid-stream server-tool continuation loop below - matches runReActAgent's
+// maxSteps convention (packages/signatures/src/agent.ts) so a misbehaving tool loop can't
+// spin forever mid-stream.
+const MAX_TOOL_ROUNDS = 5;
+
+// Kicks off one round's request. Extracted so the caller can start round 0's request eagerly
+// (before the consumer starts iterating the generator - matches every other fetch-backed
+// method in this file) while later rounds fetch lazily as the tool loop progresses.
+const postOpenAiStream = <
+    Model extends TextResponseModels,
+    // biome-ignore lint/complexity/noBannedTypes: <explanation>
+    CustomTools extends CustomToolSet = {},
+>(
+    baseInput: TextResponsesInput<Model, CustomTools, true>,
+    roundInput: TextResponsesInput<Model, CustomTools, true>['input'],
+    previousResponseId: string | undefined,
+    ctx: ProviderContext<OpenAiConfig>,
+) => {
+    type RequestBody = Omit<
+        TextResponsesInput<Model, CustomTools, true>,
+        'custom_tools' | 'built_in_tools' | 'structured_output'
+    > & {
+        tools: (
+            | FileSearchToolType
+            | WebSearchToolType
+            | ComputerUseToolType
+            | FunctionToolType
+        )[];
+        text?: {
+            format: {
+                type: 'json_schema';
+                name: string;
+                strict?: boolean;
+                schema: OpenAiStructuredSchema;
+            };
+        };
+    };
+
+    const bodyToolsArray: RequestBody['tools'] = [];
+    if (baseInput.built_in_tools) {
+        for (const tool of baseInput.built_in_tools) {
+            bodyToolsArray.push(tool);
+        }
+    }
+    if (baseInput.custom_tools) {
+        for (const [name, tool] of Object.entries(baseInput.custom_tools)) {
+            const functionTool: FunctionToolType = {
+                type: 'function',
+                name,
+                strict: tool.strict ?? false,
+                description: tool.description,
+                parameters: tool.parameters,
+            };
+            bodyToolsArray.push(functionTool);
+        }
+    }
+
+    const requestBody: RequestBody = {
+        model: baseInput.model,
+        instructions: baseInput.instructions,
+        input: roundInput,
+        stream: true,
+        reasoning: baseInput.reasoning,
+        max_output_tokens: baseInput.max_output_tokens,
+        metadata: baseInput.metadata,
+        truncation: baseInput.truncation,
+        user: baseInput.user,
+        previous_response_id: previousResponseId,
+        store: baseInput.store,
+        parallel_tool_calls: baseInput.parallel_tool_calls,
+        tool_choice: baseInput.tool_choice,
+        temperature: baseInput.temperature,
+        top_p: baseInput.top_p,
+        tools: bodyToolsArray,
+        text: baseInput.structured_output
+            ? {
+                  format: {
+                      type: 'json_schema',
+                      name: baseInput.structured_output.name,
+                      strict: baseInput.structured_output.strict,
+                      schema: transformToOpenAiSchema(
+                          baseInput.structured_output.schema,
+                      ),
+                  },
+              }
+            : undefined,
+    };
+
+    return fetch<Response, false>(
+        `${ctx.config.baseUrl}/responses`,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${ctx.config.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            MAX_FETCH_TIME: ctx.config.fetchTimeout,
+        },
+        false,
+    );
+};
+
+async function* openaiStreamRounds<
+    Model extends TextResponseModels,
+    // biome-ignore lint/complexity/noBannedTypes: <explanation>
+    CustomTools extends CustomToolSet = {},
+>(
+    input: TextResponsesInput<Model, CustomTools, true>,
+    ctx: ProviderContext<OpenAiConfig>,
+    firstEvents: AsyncGenerator<StreamResponse<Model>>,
+): AsyncGenerator<StreamEvent> {
+    // previous_response_id continuation only works against a stored response - if the caller
+    // opted out of storage, fall back to replaying the full input array instead.
+    const canUsePreviousResponseId = input.store !== false;
+
+    let roundInput: TextResponsesInput<Model, CustomTools, true>['input'] =
+        input.input;
+    let previousResponseId = input.previous_response_id;
+    let events = firstEvents;
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        if (round > 0) {
+            const response = await postOpenAiStream(
+                input,
+                roundInput,
+                previousResponseId,
+                ctx,
+            );
+            events = handleStreamResponse<StreamResponse<Model>>(response);
+        }
+
+        let finalResponse:
+            | TextResponseType<Model, TextResponsesInput<Model>>
+            | undefined;
+        let terminal = false;
+        let sawError = false;
+
+        for await (const event of events) {
+            // response.completed/incomplete map to a 'done' event via mapOpenAiStreamEvent, but
+            // that's only correct on the round that ends the whole turn - handled explicitly
+            // here instead so a mid-loop round doesn't end the generator early.
+            if (event.type === 'response.completed') {
+                finalResponse = event.response;
+                yield {
+                    type: 'usage',
+                    inputTokens: event.response.usage.input_tokens,
+                    outputTokens: event.response.usage.output_tokens,
+                };
+                continue;
+            }
+            if (event.type === 'response.incomplete') {
+                finalResponse = event.response;
+                terminal = true;
+                continue;
+            }
+            if (event.type === 'response.failed' || event.type === 'error') {
+                sawError = true;
+            }
+            const mapped = mapOpenAiStreamEvent(event);
+            if (mapped) {
+                if (Array.isArray(mapped)) yield* mapped;
+                else yield mapped;
+            }
+        }
+
+        if (sawError) return;
+        if (!finalResponse || terminal) {
+            yield { type: 'done' };
+            return;
+        }
+
+        type OutputItem = (typeof finalResponse)['output'][number];
+        const callItems = finalResponse.output.filter(
+            (item): item is Extract<OutputItem, { type: 'function_call' }> =>
+                item.type === 'function_call',
+        );
+
+        if (callItems.length === 0) {
+            yield { type: 'done' };
+            return;
+        }
+
+        const resolved = callItems.map((item) => ({
+            item,
+            tool: input.custom_tools?.[item.name] as CustomTool | undefined,
+        }));
+
+        const clientCalls = resolved.filter(
+            (r) => r.tool?.location === 'client',
+        );
+
+        if (clientCalls.length > 0) {
+            // Execute any server-located tools from this same round first, so their results
+            // travel alongside the pause event (see SiblingToolResult) - a round is never
+            // resent half-finished.
+            const siblingResults: SiblingToolResult[] = [];
+            for (const { item, tool } of resolved) {
+                if (!tool || tool.location !== 'server') continue;
+                const args = JSON.parse(item.arguments);
+                type ToolParameters = InferToolParameters<
+                    typeof tool.parameters
+                >;
+                try {
+                    const result = await tool.execute(args as ToolParameters);
+                    siblingResults.push({
+                        toolCallId: item.call_id,
+                        name: item.name,
+                        args,
+                        result,
+                    });
+                } catch (err) {
+                    siblingResults.push({
+                        toolCallId: item.call_id,
+                        name: item.name,
+                        args,
+                        result: {
+                            error:
+                                err instanceof Error
+                                    ? err.message
+                                    : String(err),
+                        },
+                    });
+                }
+            }
+
+            for (const { item, tool } of clientCalls) {
+                const args = JSON.parse(item.arguments);
+                const approval =
+                    tool?.location === 'client' ? tool.approval : 'required';
+                const shared = {
+                    toolCallId: item.call_id,
+                    name: item.name,
+                    args,
+                    siblingResults: siblingResults.length
+                        ? siblingResults
+                        : undefined,
+                };
+                if (approval === 'required') {
+                    yield {
+                        type: 'hitl-pending',
+                        jobId: crypto.randomUUID(),
+                        ...shared,
+                    };
+                } else {
+                    yield { type: 'client-tool-call', ...shared };
+                }
+            }
+            return;
+        }
+
+        // Every function_call in this round is server-located - execute and continue. Any
+        // unmatched call (no registered tool) is left unresolved, same "leave result unset"
+        // convention as the non-streaming create_response() method.
+        const toolResults: FunctionToolCallOutputType[] = [];
+        for (const { item, tool } of resolved) {
+            if (!tool || tool.location !== 'server') continue;
+            const args = JSON.parse(item.arguments);
+            type ToolParameters = InferToolParameters<typeof tool.parameters>;
+            try {
+                const result = await tool.execute(args as ToolParameters);
+                toolResults.push({
+                    call_id: item.call_id,
+                    type: 'function_call_output',
+                    output: JSON.stringify(result),
+                });
+            } catch (err) {
+                toolResults.push({
+                    call_id: item.call_id,
+                    type: 'function_call_output',
+                    output: JSON.stringify({
+                        error: err instanceof Error ? err.message : String(err),
+                    }),
+                });
+            }
+        }
+
+        if (toolResults.length === 0) {
+            yield { type: 'done' };
+            return;
+        }
+
+        if (canUsePreviousResponseId) {
+            previousResponseId = finalResponse.id;
+            roundInput = toolResults;
+        } else {
+            const priorItems = Array.isArray(roundInput)
+                ? roundInput
+                : [
+                      {
+                          type: 'message',
+                          role: 'user',
+                          content: roundInput,
+                      } as InputMessage,
+                  ];
+            roundInput = [
+                ...priorItems,
+                ...finalResponse.output,
+                ...toolResults,
+            ];
+        }
+    }
+
+    yield {
+        type: 'error',
+        message: `Exceeded max tool rounds (${MAX_TOOL_ROUNDS})`,
+    };
+}
+
 const openAiProvider = defineProvider({
     name: 'OpenAI',
     context: {
@@ -1001,96 +1314,15 @@ const openAiProvider = defineProvider({
                 input: TextResponsesInput<Model, CustomTools, true>,
                 ctx: ProviderContext<OpenAiConfig>,
             ) => {
-                type RequestBody = Omit<
-                    TextResponsesInput<Model, CustomTools, true>,
-                    'custom_tools' | 'built_in_tools' | 'structured_output'
-                > & {
-                    tools: (
-                        | FileSearchToolType
-                        | WebSearchToolType
-                        | ComputerUseToolType
-                        | FunctionToolType
-                    )[];
-                    text?: {
-                        format: {
-                            type: 'json_schema';
-                            name: string;
-                            strict?: boolean;
-                            schema: OpenAiStructuredSchema;
-                        };
-                    };
-                };
-
-                const bodyToolsArray: RequestBody['tools'] = [];
-                if (input.built_in_tools) {
-                    for (const tool of input.built_in_tools) {
-                        bodyToolsArray.push(tool);
-                    }
-                }
-                if (input.custom_tools) {
-                    for (const [name, tool] of Object.entries(
-                        input.custom_tools,
-                    )) {
-                        const functionTool: FunctionToolType = {
-                            type: 'function',
-                            name,
-                            strict: tool.strict ?? false,
-                            description: tool.description,
-                            parameters: tool.parameters,
-                        };
-                        bodyToolsArray.push(functionTool);
-                    }
-                }
-
-                const requestBody: RequestBody = {
-                    model: input.model,
-                    instructions: input.instructions,
-                    input: input.input,
-                    stream: true,
-                    reasoning: input.reasoning,
-                    max_output_tokens: input.max_output_tokens,
-                    metadata: input.metadata,
-                    truncation: input.truncation,
-                    user: input.user,
-                    previous_response_id: input.previous_response_id,
-                    store: input.store,
-                    parallel_tool_calls: input.parallel_tool_calls,
-                    tool_choice: input.tool_choice,
-                    temperature: input.temperature,
-                    top_p: input.top_p,
-                    tools: bodyToolsArray,
-                    text: input.structured_output
-                        ? {
-                              format: {
-                                  type: 'json_schema',
-                                  name: input.structured_output.name,
-                                  strict: input.structured_output.strict,
-                                  schema: transformToOpenAiSchema(
-                                      input.structured_output.schema,
-                                  ),
-                              },
-                          }
-                        : undefined,
-                };
-
-                const response = await fetch<Response, false>(
-                    `${ctx.config.baseUrl}/responses`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            Authorization: `Bearer ${ctx.config.apiKey}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(requestBody),
-                        MAX_FETCH_TIME: ctx.config.fetchTimeout,
-                    },
-                    false,
+                const firstResponse = await postOpenAiStream(
+                    input,
+                    input.input,
+                    input.previous_response_id,
+                    ctx,
                 );
-
-                return mapToStreamEvents(
-                    handleStreamResponse<StreamResponse<Model>>(response),
-                    mapOpenAiStreamEvent,
-                );
+                const firstEvents =
+                    handleStreamResponse<StreamResponse<Model>>(firstResponse);
+                return openaiStreamRounds(input, ctx, firstEvents);
             },
             get_response: async (
                 input: { id: string },
