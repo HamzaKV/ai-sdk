@@ -196,7 +196,7 @@ type ImageContent = {
 // `string | ContentBlock[]` - multi-block turns (e.g. text + tool_use, or several
 // parallel tool_result blocks) require an array, so AnthropicMessagesInput.messages
 // below accepts a bare block OR an array of them, never just a bare block alone.
-type AnthropicContentBlock =
+export type AnthropicContentBlock =
     | {
           type: 'text';
           text: string;
@@ -339,12 +339,14 @@ type AnthropicContentBlock =
           cache_control?: CacheControl; // Cache control for the upload
       };
 
+export type AnthropicMessage = {
+    role: 'user' | 'assistant';
+    content: string | AnthropicContentBlock | AnthropicContentBlock[];
+};
+
 type AnthropicMessagesInput = {
     model: Model;
-    messages: {
-        role: 'user' | 'assistant';
-        content: string | AnthropicContentBlock | AnthropicContentBlock[];
-    }[];
+    messages: AnthropicMessage[];
     max_tokens: number;
     container?: string;
     mcp_servers?: {

@@ -27,7 +27,7 @@ type ContentType =
           file_data: string;
       };
 
-type InputMessage = {
+export type InputMessage = {
     type: 'message';
     role: 'developer' | 'user' | 'assistant' | 'system';
     content: string | ContentType[];
@@ -170,7 +170,7 @@ export const customTool = <T extends CustomTool<any, any>>(tool: T): T => {
 
 type CustomToolSet = Record<string, CustomTool>;
 
-type FunctionToolCallOutputType = {
+export type FunctionToolCallOutputType = {
     id?: string;
     call_id: string;
     output: string;
@@ -209,7 +209,7 @@ type Refusal = {
     refusal: string;
 };
 
-type TextResponseOutput<T extends string | undefined> =
+export type TextResponseOutput<T extends string | undefined> =
     | {
           id: string;
           role: 'assistant';
