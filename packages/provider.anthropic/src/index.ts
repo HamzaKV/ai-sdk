@@ -2,7 +2,8 @@ import { defineProvider, type ProviderContext } from '@varlabs/ai/provider';
 import fetch from '@varlabs/ai.utils/fetch.server';
 import {
     handleStreamResponse,
-    mapToStreamEvents,
+    type StreamEvent,
+    type SiblingToolResult,
 } from '@varlabs/ai/utils/streaming';
 import type {
     JsonSchemaParameters as ToolParameters,
@@ -88,7 +89,10 @@ type CustomTool<TParams extends ToolParameters = any, TResult = any> =
           location: 'server';
           execute: (args: InferToolParameters<TParams>) => Promise<TResult>;
       })
-    | (CustomToolBase<TParams> & { location: 'client' });
+    | (CustomToolBase<TParams> & {
+          location: 'client';
+          approval: 'auto' | 'required';
+      });
 
 export const customTool = <T extends CustomTool<any, any>>(tool: T): T => {
     return tool;
@@ -188,153 +192,158 @@ type ImageContent = {
           };
 };
 
+// A single input content block. Anthropic's real wire contract for `content` is
+// `string | ContentBlock[]` - multi-block turns (e.g. text + tool_use, or several
+// parallel tool_result blocks) require an array, so AnthropicMessagesInput.messages
+// below accepts a bare block OR an array of them, never just a bare block alone.
+type AnthropicContentBlock =
+    | {
+          type: 'text';
+          text: string;
+          cache_control?: CacheControl;
+          citations?: Citation[];
+      }
+    | ImageContent
+    | {
+          type: 'document';
+          cache_control?: CacheControl;
+          citations?: Citation[];
+          context?: string;
+          title?: string;
+          source:
+              | {
+                    type: 'base64';
+                    media_type: 'application/pdf';
+                    data: string; // Base64 encoded PDF data
+                }
+              | {
+                    type: 'text';
+                    media_type: 'text/plain';
+                    data: string; // Plain text data
+                }
+              | {
+                    type: 'content';
+                    content: string | (TextContent | ImageContent)[];
+                }
+              | {
+                    type: 'url';
+                    url: string; // URL to the document
+                }
+              | {
+                    type: 'file';
+                    file_id: string; // Identifier for the file
+                };
+      }
+    | {
+          type: 'thinking';
+          thinking: string; // Thinking content
+          signature: string;
+      }
+    | {
+          type: 'redacted_thinking';
+          data: string; // Redacted thinking content
+      }
+    | {
+          type: 'tool_use';
+          id: string; // Unique identifier for the tool use
+          name: string; // Name of the tool used
+          input: any; // Input parameters for the tool
+          cache_control?: CacheControl;
+      }
+    | {
+          type: 'tool_result';
+          tool_use_id: string; // Identifier for the tool use
+          is_error?: boolean; // Indicates if the tool result is an error
+          cache_control?: CacheControl;
+          content?: string | (TextContent | ImageContent)[];
+      }
+    | {
+          type: 'server_tool_use';
+          id: string; // Unique identifier for the server tool use
+          name: 'web_search' | 'code_execution';
+          input: any; // Input parameters for the server tool
+          cache_control?: CacheControl;
+      }
+    | {
+          type: 'web_search_tool_result';
+          tool_use_id: string; // Identifier for the web search tool use
+          cache_control?: CacheControl;
+          content:
+              | {
+                    type: 'web_search_tool_result_error';
+                    error_code:
+                        | 'invalid_tool_input'
+                        | 'unavailable'
+                        | 'max_uses_exceeded'
+                        | 'too_many_requests'
+                        | 'query_too_long';
+                }
+              | {
+                    encrypted_content: string; // Encrypted content from the web search
+                    title: string; // Title of the web search result
+                    type: 'web_search_result';
+                    url: string; // URL of the web search result
+                    page_age?: string; // Age of the page in the search result
+                }[];
+      }
+    | {
+          type: 'code_execution_tool_result';
+          tool_use_id: string; // Identifier for the code execution tool use
+          cache_control?: CacheControl;
+          content:
+              | {
+                    type: 'code_execution_tool_result_error';
+                    error_code:
+                        | 'invalid_tool_input'
+                        | 'unavailable'
+                        | 'max_uses_exceeded'
+                        | 'too_many_requests'
+                        | 'query_too_long';
+                }
+              | {
+                    type: 'code_execution_result';
+                    stdout: string; // Standard output from the code execution
+                    stderr: string; // Standard error output from the code execution
+                    return_code: number; // Return code from the code execution
+                    content: {
+                        type: 'code_execution_output';
+                        file_id: string; // Identifier for the file output
+                    }[];
+                };
+      }
+    | {
+          type: 'mcp_tool_use';
+          id: string; // Unique identifier for the MCP tool use
+          input: any; // Input parameters for the MCP tool
+          name: string; // Name of the MCP tool
+          server_name: string; // Name of the MCP server
+          cache_control?: CacheControl;
+      }
+    | {
+          type: 'mcp_tool_result';
+          tool_use_id: string; // Identifier for the MCP tool use
+          content:
+              | string
+              | {
+                    text: string; // Text content from the MCP tool result
+                    type: 'text';
+                    citations?: Citation[]; // Citations associated with the text content
+                    cache_control?: CacheControl; // Cache control for the content
+                };
+          cache_control?: CacheControl;
+          is_error?: boolean; // Indicates if the MCP tool result is an error
+      }
+    | {
+          type: 'container_upload';
+          file_id: string; // Identifier for the uploaded file
+          cache_control?: CacheControl; // Cache control for the upload
+      };
+
 type AnthropicMessagesInput = {
     model: Model;
     messages: {
         role: 'user' | 'assistant';
-        content:
-            | string
-            | {
-                  type: 'text';
-                  text: string;
-                  cache_control?: CacheControl;
-                  citations?: Citation[];
-              }
-            | ImageContent
-            | {
-                  type: 'document';
-                  cache_control?: CacheControl;
-                  citations?: Citation[];
-                  context?: string;
-                  title?: string;
-                  source:
-                      | {
-                            type: 'base64';
-                            media_type: 'application/pdf';
-                            data: string; // Base64 encoded PDF data
-                        }
-                      | {
-                            type: 'text';
-                            media_type: 'text/plain';
-                            data: string; // Plain text data
-                        }
-                      | {
-                            type: 'content';
-                            content: string | (TextContent | ImageContent)[];
-                        }
-                      | {
-                            type: 'url';
-                            url: string; // URL to the document
-                        }
-                      | {
-                            type: 'file';
-                            file_id: string; // Identifier for the file
-                        };
-              }
-            | {
-                  type: 'thinking';
-                  thinking: string; // Thinking content
-                  signature: string;
-              }
-            | {
-                  type: 'redacted_thinking';
-                  data: string; // Redacted thinking content
-              }
-            | {
-                  type: 'tool_use';
-                  id: string; // Unique identifier for the tool use
-                  name: string; // Name of the tool used
-                  input: any; // Input parameters for the tool
-                  cache_control?: CacheControl;
-              }
-            | {
-                  type: 'tool_result';
-                  tool_use_id: string; // Identifier for the tool use
-                  is_error?: boolean; // Indicates if the tool result is an error
-                  cache_control?: CacheControl;
-                  content?: string | (TextContent | ImageContent)[];
-              }
-            | {
-                  type: 'server_tool_use';
-                  id: string; // Unique identifier for the server tool use
-                  name: 'web_search' | 'code_execution';
-                  input: any; // Input parameters for the server tool
-                  cache_control?: CacheControl;
-              }
-            | {
-                  type: 'web_search_tool_result';
-                  tool_use_id: string; // Identifier for the web search tool use
-                  cache_control?: CacheControl;
-                  content:
-                      | {
-                            type: 'web_search_tool_result_error';
-                            error_code:
-                                | 'invalid_tool_input'
-                                | 'unavailable'
-                                | 'max_uses_exceeded'
-                                | 'too_many_requests'
-                                | 'query_too_long';
-                        }
-                      | {
-                            encrypted_content: string; // Encrypted content from the web search
-                            title: string; // Title of the web search result
-                            type: 'web_search_result';
-                            url: string; // URL of the web search result
-                            page_age?: string; // Age of the page in the search result
-                        }[];
-              }
-            | {
-                  type: 'code_execution_tool_result';
-                  tool_use_id: string; // Identifier for the code execution tool use
-                  cache_control?: CacheControl;
-                  content:
-                      | {
-                            type: 'code_execution_tool_result_error';
-                            error_code:
-                                | 'invalid_tool_input'
-                                | 'unavailable'
-                                | 'max_uses_exceeded'
-                                | 'too_many_requests'
-                                | 'query_too_long';
-                        }
-                      | {
-                            type: 'code_execution_result';
-                            stdout: string; // Standard output from the code execution
-                            stderr: string; // Standard error output from the code execution
-                            return_code: number; // Return code from the code execution
-                            content: {
-                                type: 'code_execution_output';
-                                file_id: string; // Identifier for the file output
-                            }[];
-                        };
-              }
-            | {
-                  type: 'mcp_tool_use';
-                  id: string; // Unique identifier for the MCP tool use
-                  input: any; // Input parameters for the MCP tool
-                  name: string; // Name of the MCP tool
-                  server_name: string; // Name of the MCP server
-                  cache_control?: CacheControl;
-              }
-            | {
-                  type: 'mcp_tool_result';
-                  tool_use_id: string; // Identifier for the MCP tool use
-                  content:
-                      | string
-                      | {
-                            text: string; // Text content from the MCP tool result
-                            type: 'text';
-                            citations?: Citation[]; // Citations associated with the text content
-                            cache_control?: CacheControl; // Cache control for the content
-                        };
-                  cache_control?: CacheControl;
-                  is_error?: boolean; // Indicates if the MCP tool result is an error
-              }
-            | {
-                  type: 'container_upload';
-                  file_id: string; // Identifier for the uploaded file
-                  cache_control?: CacheControl; // Cache control for the upload
-              };
+        content: string | AnthropicContentBlock | AnthropicContentBlock[];
     }[];
     max_tokens: number;
     container?: string;
@@ -564,6 +573,274 @@ type AnthropicConfig = {
     fetchTimeout?: number;
 };
 
+// Bounds the mid-stream server-tool continuation loop below - matches runReActAgent's
+// maxSteps convention (packages/signatures/src/agent.ts) so a misbehaving tool loop can't
+// spin forever mid-stream.
+const MAX_TOOL_ROUNDS = 5;
+
+// Reassembles one streamed content block (text/thinking/tool_use/...) from its
+// content_block_start seed plus any deltas, in the shape needed to replay it verbatim in a
+// follow-up request. Anthropic requires the full prior turn (including thinking blocks, when
+// extended thinking is on) to be echoed back unmodified alongside a tool_result.
+type AccumulatingBlock = AnthropicContentBlock & { inputJson?: string };
+
+// Kicks off one round's request. Extracted so the caller can start round 0's request eagerly
+// (before the consumer starts iterating the generator - matches every other fetch-backed
+// method in this file) while later rounds fetch lazily as the tool loop progresses.
+const postAnthropicStream = (
+    messages: AnthropicMessagesInput['messages'],
+    initialInput: AnthropicMessagesInput,
+    ctx: ProviderContext<AnthropicConfig>,
+) => {
+    const { apiKey, baseUrl, apiVersion, fetchTimeout } = ctx.config;
+    return fetch<Response, false>(
+        `${baseUrl}/messages`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': apiVersion,
+            },
+            body: JSON.stringify({
+                ...initialInput,
+                messages,
+                tools: initialInput.tools?.map((tool) => {
+                    if (tool.type === 'custom') {
+                        return {
+                            name: tool.name,
+                            type: 'custom',
+                            description: tool.description,
+                            cache_control: tool.cache_control,
+                            input_schema: tool.input_schema,
+                        };
+                    }
+                    return tool;
+                }),
+                stream: true,
+            }),
+            MAX_FETCH_TIME: fetchTimeout,
+        },
+        false,
+    );
+};
+
+async function* anthropicStreamRounds(
+    initialInput: AnthropicMessagesInput,
+    ctx: ProviderContext<AnthropicConfig>,
+    firstEvents: AsyncGenerator<AnthropicStreamEvent>,
+): AsyncGenerator<StreamEvent> {
+    let messages = initialInput.messages;
+    let events = firstEvents;
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        if (round > 0) {
+            const response = await postAnthropicStream(
+                messages,
+                initialInput,
+                ctx,
+            );
+            events = handleStreamResponse<AnthropicStreamEvent>(response);
+        }
+
+        const blocks = new Map<number, AccumulatingBlock>();
+        let sawError = false;
+
+        for await (const event of events) {
+            // message_stop maps to a 'done' event, but that's only correct on the round that
+            // ends the whole turn - suppressed here and emitted explicitly once we know whether
+            // this round continues (tool execution) or finishes.
+            if (event.type !== 'message_stop') {
+                const mapped = mapAnthropicStreamEvent(event);
+                if (mapped) {
+                    if (Array.isArray(mapped)) yield* mapped;
+                    else yield mapped;
+                }
+            }
+            if (event.type === 'error') sawError = true;
+
+            if (event.type === 'content_block_start') {
+                const block: AccumulatingBlock = { ...event.content_block };
+                if (block.type === 'tool_use') block.inputJson = '';
+                blocks.set(event.index, block);
+            } else if (event.type === 'content_block_delta') {
+                const block = blocks.get(event.index);
+                if (!block) continue;
+                if (
+                    event.delta.type === 'text_delta' &&
+                    block.type === 'text'
+                ) {
+                    block.text += event.delta.text;
+                } else if (
+                    event.delta.type === 'thinking_delta' &&
+                    block.type === 'thinking'
+                ) {
+                    block.thinking += event.delta.thinking;
+                } else if (
+                    event.delta.type === 'signature_delta' &&
+                    block.type === 'thinking'
+                ) {
+                    block.signature =
+                        (block.signature ?? '') + event.delta.signature;
+                } else if (
+                    event.delta.type === 'input_json_delta' &&
+                    block.type === 'tool_use'
+                ) {
+                    block.inputJson =
+                        (block.inputJson ?? '') + event.delta.partial_json;
+                }
+            } else if (event.type === 'content_block_stop') {
+                const block = blocks.get(event.index);
+                if (block?.type === 'tool_use') {
+                    try {
+                        block.input = block.inputJson
+                            ? JSON.parse(block.inputJson)
+                            : {};
+                    } catch {
+                        block.input = {};
+                    }
+                    block.inputJson = undefined;
+                }
+            }
+        }
+
+        if (sawError) return;
+
+        const finalizedBlocks = [...blocks.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([, block]) => block as AnthropicContentBlock);
+        const toolUseBlocks = finalizedBlocks.filter(
+            (
+                block,
+            ): block is Extract<AnthropicContentBlock, { type: 'tool_use' }> =>
+                block.type === 'tool_use',
+        );
+
+        if (toolUseBlocks.length === 0) {
+            yield { type: 'done' };
+            return;
+        }
+
+        const resolved = toolUseBlocks.map((block) => {
+            const tool = initialInput.tools?.find((t) => t.name === block.name);
+            const location =
+                tool && tool.type === 'custom' ? tool.location : undefined;
+            return { block, tool, location };
+        });
+
+        const clientCalls = resolved.filter((r) => r.location === 'client');
+
+        if (clientCalls.length > 0) {
+            // Execute any server-located tools from this same round first, so their results
+            // travel alongside the pause event (see SiblingToolResult) - a round is never
+            // resent half-finished.
+            const siblingResults: SiblingToolResult[] = [];
+            for (const { block, tool } of resolved) {
+                if (
+                    !tool ||
+                    tool.type !== 'custom' ||
+                    tool.location !== 'server'
+                )
+                    continue;
+                type ToolParameters = InferToolParameters<
+                    typeof tool.input_schema
+                >;
+                try {
+                    const result = await tool.execute(
+                        block.input as ToolParameters,
+                    );
+                    siblingResults.push({
+                        toolCallId: block.id,
+                        name: block.name,
+                        args: block.input,
+                        result,
+                    });
+                } catch (err) {
+                    siblingResults.push({
+                        toolCallId: block.id,
+                        name: block.name,
+                        args: block.input,
+                        result: {
+                            error:
+                                err instanceof Error
+                                    ? err.message
+                                    : String(err),
+                        },
+                    });
+                }
+            }
+
+            for (const { block, tool } of clientCalls) {
+                const approval =
+                    tool && tool.type === 'custom' && tool.location === 'client'
+                        ? tool.approval
+                        : 'required';
+                const shared = {
+                    toolCallId: block.id,
+                    name: block.name,
+                    args: block.input,
+                    siblingResults: siblingResults.length
+                        ? siblingResults
+                        : undefined,
+                };
+                if (approval === 'required') {
+                    yield {
+                        type: 'hitl-pending',
+                        jobId: crypto.randomUUID(),
+                        ...shared,
+                    };
+                } else {
+                    yield { type: 'client-tool-call', ...shared };
+                }
+            }
+            return;
+        }
+
+        // Every tool_use in this round is server-located - execute and continue. Any unmatched
+        // tool_use (no registered tool) is left unresolved, same "leave result unset"
+        // convention as the non-streaming messages() method.
+        const toolResults: AnthropicContentBlock[] = [];
+        for (const { block, tool } of resolved) {
+            if (!tool || tool.type !== 'custom' || tool.location !== 'server')
+                continue;
+            type ToolParameters = InferToolParameters<typeof tool.input_schema>;
+            try {
+                const result = await tool.execute(
+                    block.input as ToolParameters,
+                );
+                toolResults.push({
+                    type: 'tool_result',
+                    tool_use_id: block.id,
+                    content: JSON.stringify(result),
+                });
+            } catch (err) {
+                toolResults.push({
+                    type: 'tool_result',
+                    tool_use_id: block.id,
+                    is_error: true,
+                    content: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+
+        if (toolResults.length === 0) {
+            yield { type: 'done' };
+            return;
+        }
+
+        messages = [
+            ...messages,
+            { role: 'assistant', content: finalizedBlocks },
+            { role: 'user', content: toolResults },
+        ];
+    }
+
+    yield {
+        type: 'error',
+        message: `Exceeded max tool rounds (${MAX_TOOL_ROUNDS})`,
+    };
+}
+
 const anthropicProvider = defineProvider({
     name: 'anthropic',
     context: {
@@ -642,31 +919,14 @@ const anthropicProvider = defineProvider({
                 input: AnthropicMessagesInput,
                 ctx: ProviderContext<AnthropicConfig>,
             ) => {
-                const { apiKey, baseUrl, apiVersion, fetchTimeout } =
-                    ctx.config;
-
-                const response = await fetch<Response, false>(
-                    `${baseUrl}/messages`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-api-key': apiKey,
-                            'anthropic-version': apiVersion,
-                        },
-                        body: JSON.stringify({
-                            ...input,
-                            stream: true,
-                        }),
-                        MAX_FETCH_TIME: fetchTimeout,
-                    },
-                    false,
+                const firstResponse = await postAnthropicStream(
+                    input.messages,
+                    input,
+                    ctx,
                 );
-
-                return mapToStreamEvents(
-                    handleStreamResponse<AnthropicStreamEvent>(response),
-                    mapAnthropicStreamEvent,
-                );
+                const firstEvents =
+                    handleStreamResponse<AnthropicStreamEvent>(firstResponse);
+                return anthropicStreamRounds(input, ctx, firstEvents);
             },
         },
     },

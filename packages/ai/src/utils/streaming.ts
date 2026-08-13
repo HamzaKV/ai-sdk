@@ -1,5 +1,15 @@
 // Shared stream protocol every provider normalizes its own wire format into,
 // so downstream consumers (ui.core, signatures) never see provider-specific shapes.
+// A server-located tool call from the same round as a paused client-tool-call/hitl-pending
+// event, already executed by the provider before it paused. Carried so the resumed turn can
+// include its tool_result alongside the client tool's - a round is never resent half-finished.
+export type SiblingToolResult = {
+    toolCallId: string;
+    name: string;
+    args: unknown;
+    result: unknown;
+};
+
 export type StreamEvent =
     | { type: 'text-delta'; delta: string }
     | { type: 'reasoning-delta'; delta: string }
@@ -11,6 +21,7 @@ export type StreamEvent =
           toolCallId: string;
           name: string;
           args: unknown;
+          siblingResults?: SiblingToolResult[];
       }
     | {
           type: 'hitl-pending';
@@ -18,6 +29,7 @@ export type StreamEvent =
           toolCallId: string;
           name: string;
           args: unknown;
+          siblingResults?: SiblingToolResult[];
       }
     | { type: 'error'; message: string }
     | { type: 'done' };
