@@ -1,6 +1,6 @@
 {
     "name": "@varlabs/ai.mcp",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "MCP client for the AI SDK: connects to remote MCP servers over streamable HTTP and converts their tools into SDK Tool definitions",
     "author": "HamzaKV <hamzakv333@gmail.com>",
     "repository": "https://github.com/HamzaKV/ai-sdk.git",

@@ -1,5 +1,19 @@
 # chat-app
 
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [431465b]
+- Updated dependencies [ba64266]
+- Updated dependencies [ba64266]
+- Updated dependencies [ba64266]
+- Updated dependencies [431465b]
+  - @varlabs/ai.ui-core@0.2.0
+  - @varlabs/ai.openai@0.3.0
+  - @varlabs/ai@0.3.0
+  - @varlabs/ai.ui-react@0.2.0
+
 ## 0.0.1
 
 ### Patch Changes
