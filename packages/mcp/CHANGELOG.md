@@ -1,5 +1,12 @@
 # @varlabs/ai.mcp
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [ba64266]
+  - @varlabs/ai@0.3.0
+
 ## 0.1.1
 
 ### Patch Changes

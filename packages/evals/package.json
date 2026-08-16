@@ -1,6 +1,6 @@
 {
     "name": "@varlabs/ai.evals",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Dataset regression evals for the AI SDK: pluggable scorers (exact-match, embedding similarity, LLM-as-judge) that compose with your own vitest suite",
     "author": "HamzaKV <hamzakv333@gmail.com>",
     "repository": "https://github.com/HamzaKV/ai-sdk.git",

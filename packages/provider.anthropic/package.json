@@ -1,6 +1,6 @@
 {
     "name": "@varlabs/ai.anthropic",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Anthropic provider for the AI SDK",
     "author": "HamzaKV <hamzakv333@gmail.com>",
     "repository": "https://github.com/HamzaKV/ai-sdk.git",

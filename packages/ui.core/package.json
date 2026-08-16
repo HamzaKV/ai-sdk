@@ -1,6 +1,6 @@
 {
     "name": "@varlabs/ai.ui-core",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "description": "Framework-agnostic chat/stream/tool-call/HITL state machine for the AI SDK, consumed by framework bindings like @varlabs/ai.ui-react",
     "author": "HamzaKV <hamzakv333@gmail.com>",
     "repository": "https://github.com/HamzaKV/ai-sdk.git",
