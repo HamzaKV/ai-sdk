@@ -64,6 +64,10 @@ export type ChatCore = {
     sendMessage(content: string): Promise<void>;
     approve(args?: unknown): Promise<void>;
     deny(reason?: string): Promise<void>;
+    // Rehydrates state from a durable jobStore entry - for a fresh ChatCore (reload, new tab,
+    // different device) that didn't itself pause the turn. approve()/deny() work unmodified
+    // once this populates messages/pendingApproval.
+    resumeFromJob(jobId: string): Promise<void>;
 };
 
 let fallbackIdCounter = 0;
@@ -301,6 +305,33 @@ export const createChatCore = (options: CreateChatCoreOptions): ChatCore => {
                 { error: 'denied', reason },
                 pending.toolCallId,
             );
+        },
+        async resumeFromJob(jobId) {
+            if (state.status !== 'idle' && state.status !== 'error') {
+                throw new Error(
+                    `Cannot resume while status is "${state.status}"`,
+                );
+            }
+
+            const job = await jobStore.get(jobId);
+            if (!job) throw new Error(`No job found for id "${jobId}"`);
+            if (job.status !== 'pending') {
+                throw new Error(
+                    `Job "${jobId}" is not pending (status: "${job.status}")`,
+                );
+            }
+
+            setState({
+                messages: job.conversationState,
+                status: 'awaiting-approval',
+                error: undefined,
+                pendingApproval: {
+                    jobId: job.id,
+                    toolCallId: job.pendingToolCall.toolCallId,
+                    name: job.pendingToolCall.name,
+                    args: job.pendingToolCall.args,
+                },
+            });
         },
     };
 };

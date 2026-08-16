@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createChatCore, type ChatMessage } from './index';
 import type { StreamEvent } from '@varlabs/ai/utils/streaming';
+import {
+    createJobStore,
+    createInMemoryStatePersistence,
+    type HitlJob,
+} from '@varlabs/ai.state';
 
 async function* gen(events: StreamEvent[]): AsyncGenerator<StreamEvent> {
     for (const event of events) yield event;
@@ -363,5 +368,135 @@ describe('createChatCore', () => {
         const state = chat.getState();
         expect(state.messages[0].content).toBe('[redacted] secret');
         expect(state.messages[1].content).toBe('hi!');
+    });
+
+    describe('resumeFromJob', () => {
+        it('rehydrates a fresh ChatCore from a shared jobStore and lets it approve', async () => {
+            const sharedJobStore = createJobStore(
+                createInMemoryStatePersistence<HitlJob<ChatMessage[]>>(),
+            );
+
+            const streamFnA = vi.fn().mockReturnValueOnce(
+                gen([
+                    {
+                        type: 'hitl-pending',
+                        jobId: 'job_1',
+                        toolCallId: 'call_1',
+                        name: 'deleteAccount',
+                        args: { id: 42 },
+                    },
+                ]),
+            );
+            const chatA = createChatCore({
+                streamFn: streamFnA,
+                jobStore: sharedJobStore,
+            });
+            await chatA.sendMessage('delete my account');
+            expect(chatA.getState().status).toBe('awaiting-approval');
+
+            // A fresh instance - simulates a reload/new tab/different device. Its own state
+            // starts empty; only the shared jobStore carries the paused turn.
+            const deleteAccount = vi.fn().mockResolvedValue({ ok: true });
+            const streamFnB = vi
+                .fn()
+                .mockReturnValueOnce(
+                    gen([
+                        { type: 'text-delta', delta: 'Done' },
+                        { type: 'done' },
+                    ]),
+                );
+            const chatB = createChatCore({
+                streamFn: streamFnB,
+                jobStore: sharedJobStore,
+                clientTools: { deleteAccount },
+            });
+
+            expect(chatB.getState().messages).toEqual([]);
+            await chatB.resumeFromJob('job_1');
+
+            expect(chatB.getState().status).toBe('awaiting-approval');
+            expect(chatB.getState().pendingApproval).toMatchObject({
+                jobId: 'job_1',
+                name: 'deleteAccount',
+                args: { id: 42 },
+            });
+            expect(chatB.getState().messages).toEqual(
+                chatA.getState().messages,
+            );
+
+            await chatB.approve();
+
+            expect(deleteAccount).toHaveBeenCalledWith({ id: 42 });
+            expect(chatB.getState().status).toBe('idle');
+            // runTurn() appends a fresh empty assistant placeholder before invoking streamFn -
+            // filter it out, same pattern as the ChatMessage.toolCalls resume test above.
+            const resumedMessages: ChatMessage[] =
+                streamFnB.mock.calls[0][0].filter(
+                    (m: ChatMessage) =>
+                        m.content.trim().length > 0 ||
+                        m.role === 'tool' ||
+                        (m.toolCalls?.length ?? 0) > 0,
+                );
+            expect(resumedMessages.at(-1)).toMatchObject({
+                role: 'tool',
+                toolCallId: 'call_1',
+                content: JSON.stringify({ ok: true }),
+            });
+        });
+
+        it('rejects resuming an unknown job id', async () => {
+            const chat = createChatCore({ streamFn: vi.fn() });
+            await expect(chat.resumeFromJob('nope')).rejects.toThrow(
+                'No job found',
+            );
+        });
+
+        it('rejects resuming an already-approved job', async () => {
+            const sharedJobStore = createJobStore(
+                createInMemoryStatePersistence<HitlJob<ChatMessage[]>>(),
+            );
+            await sharedJobStore.create({
+                id: 'job_2',
+                conversationState: [],
+                pendingToolCall: {
+                    toolCallId: 'call_2',
+                    name: 'deleteAccount',
+                    args: {},
+                },
+            });
+            await sharedJobStore.approve('job_2');
+
+            const chat = createChatCore({
+                streamFn: vi.fn(),
+                jobStore: sharedJobStore,
+            });
+            await expect(chat.resumeFromJob('job_2')).rejects.toThrow(
+                'not pending',
+            );
+        });
+
+        it('rejects resuming while a turn is already in flight', async () => {
+            let resolveStream: () => void = () => {};
+            const blocked = new Promise<void>((resolve) => {
+                resolveStream = resolve;
+            });
+            async function* slowGen(): AsyncGenerator<StreamEvent> {
+                yield { type: 'text-delta', delta: 'hi' };
+                await blocked;
+                yield { type: 'done' };
+            }
+
+            const chat = createChatCore({
+                streamFn: vi.fn().mockReturnValueOnce(slowGen()),
+            });
+            const first = chat.sendMessage('one');
+
+            await expect(chat.resumeFromJob('job_3')).rejects.toThrow(
+                'Cannot resume',
+            );
+
+            resolveStream();
+            await first;
+        });
     });
 });

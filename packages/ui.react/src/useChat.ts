@@ -65,5 +65,6 @@ export const useChat = (options: UseChatOptions) => {
         sendMessage: core.sendMessage,
         approve: core.approve,
         deny: core.deny,
+        resumeFromJob: core.resumeFromJob,
     };
 };
