@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useChat } from '@varlabs/ai.ui-react';
 import type { ChatMessage } from '@varlabs/ai.ui-core';
+import type { JobStore } from '@varlabs/ai.state';
 import {
     handleStreamResponse,
     type StreamEvent,
@@ -34,6 +36,41 @@ const getLocation = async () => ({ city: 'San Francisco' });
 // deleteAccount, registered with approval: 'required'). Demo only - doesn't delete anything.
 const deleteAccount = async () => ({ ok: true });
 
+// Proxies to server.ts's job routes instead of the browser-default in-memory jobStore, which
+// is private to this one tab/instance. Routing through the server (shared across every tab
+// hitting it) is what makes resumeFromJob a genuine cross-tab/cross-device demo below, not
+// just same-tab plumbing.
+const httpJobStore: JobStore<ChatMessage[]> = {
+    async create(input) {
+        const res = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input),
+        });
+        return res.json();
+    },
+    async get(id) {
+        const res = await fetch(`/api/jobs/${id}`);
+        return res.ok ? res.json() : undefined;
+    },
+    async approve(id, args) {
+        const res = await fetch(`/api/jobs/${id}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ args }),
+        });
+        return res.ok ? res.json() : undefined;
+    },
+    async deny(id, reason) {
+        const res = await fetch(`/api/jobs/${id}/deny`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason }),
+        });
+        return res.ok ? res.json() : undefined;
+    },
+};
+
 export function App() {
     const {
         messages,
@@ -44,10 +81,26 @@ export function App() {
         handleSubmit,
         approve,
         deny,
+        resumeFromJob,
     } = useChat({
         streamFn,
         clientTools: { getLocation, deleteAccount },
+        jobStore: httpJobStore,
     });
+
+    const [resumeJobId, setResumeJobId] = useState('');
+    const [resumeError, setResumeError] = useState('');
+
+    const handleResume = async (event: { preventDefault?: () => void }) => {
+        event.preventDefault?.();
+        if (!resumeJobId.trim()) return;
+        setResumeError('');
+        try {
+            await resumeFromJob(resumeJobId.trim());
+        } catch (err) {
+            setResumeError(err instanceof Error ? err.message : String(err));
+        }
+    };
 
     return (
         <main className='chat'>
@@ -68,6 +121,11 @@ export function App() {
                             Approve <strong>{pendingApproval.name}</strong> with
                             args{' '}
                             <code>{JSON.stringify(pendingApproval.args)}</code>?
+                        </p>
+                        <p className='job-id'>
+                            Job ID (paste into another tab's resume box to
+                            approve from there):{' '}
+                            <code>{pendingApproval.jobId}</code>
                         </p>
                         <button type='button' onClick={() => approve()}>
                             Approve
@@ -102,6 +160,26 @@ export function App() {
                 >
                     Send
                 </button>
+            </form>
+            <form className='resume-form' onSubmit={handleResume}>
+                <input
+                    value={resumeJobId}
+                    onChange={(e) => setResumeJobId(e.target.value)}
+                    disabled={status !== 'idle' && status !== 'error'}
+                    placeholder='Resume a pending job by ID…'
+                />
+                <button
+                    type='submit'
+                    disabled={
+                        (status !== 'idle' && status !== 'error') ||
+                        !resumeJobId.trim()
+                    }
+                >
+                    Resume
+                </button>
+                {resumeError && (
+                    <p className='status status-error'>{resumeError}</p>
+                )}
             </form>
         </main>
     );

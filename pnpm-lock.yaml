@@ -30,6 +30,9 @@ importers:
       '@varlabs/ai.openai':
         specifier: workspace:*
         version: link:../../packages/provider.openai
+      '@varlabs/ai.state':
+        specifier: workspace:*
+        version: link:../../packages/state
       '@varlabs/ai.ui-core':
         specifier: workspace:*
         version: link:../../packages/ui.core

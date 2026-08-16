@@ -12,6 +12,11 @@ import {
     type StreamEvent,
 } from '@varlabs/ai/utils/streaming';
 import type { ChatMessage } from '@varlabs/ai.ui-core';
+import {
+    createJobStore,
+    createInMemoryStatePersistence,
+    type HitlJob,
+} from '@varlabs/ai.state';
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {
@@ -66,12 +71,59 @@ const deleteAccount = customTool({
     parameters: { type: 'object', properties: {} },
 });
 
-const readJsonBody = async (
-    req: IncomingMessage,
-): Promise<{ messages: ChatMessage[] }> => {
+const readJsonBody = async (req: IncomingMessage): Promise<any> => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
     return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+};
+
+const sendJson = (res: ServerResponse, status: number, body: unknown) => {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+};
+
+// Server-side job store, shared across every browser tab hitting this dev server - unlike the
+// browser-default in-memory jobStore (private to one ChatCore instance), this is what actually
+// makes cross-tab/cross-device HITL resume possible: approve a job paused in tab A from tab B.
+const jobStore = createJobStore(
+    createInMemoryStatePersistence<HitlJob<ChatMessage[]>>(),
+);
+
+const handleJobs = async (req: IncomingMessage, res: ServerResponse) => {
+    const url = req.url ?? '';
+
+    if (req.method === 'POST' && url === '/api/jobs') {
+        const job = await jobStore.create(await readJsonBody(req));
+        return sendJson(res, 200, job);
+    }
+
+    const approveMatch = url.match(/^\/api\/jobs\/([^/]+)\/approve$/);
+    if (req.method === 'POST' && approveMatch) {
+        const { args } = await readJsonBody(req);
+        const job = await jobStore.approve(approveMatch[1], args);
+        return job
+            ? sendJson(res, 200, job)
+            : sendJson(res, 404, { error: 'not found' });
+    }
+
+    const denyMatch = url.match(/^\/api\/jobs\/([^/]+)\/deny$/);
+    if (req.method === 'POST' && denyMatch) {
+        const { reason } = await readJsonBody(req);
+        const job = await jobStore.deny(denyMatch[1], reason);
+        return job
+            ? sendJson(res, 200, job)
+            : sendJson(res, 404, { error: 'not found' });
+    }
+
+    const getMatch = url.match(/^\/api\/jobs\/([^/]+)$/);
+    if (req.method === 'GET' && getMatch) {
+        const job = await jobStore.get(getMatch[1]);
+        return job
+            ? sendJson(res, 200, job)
+            : sendJson(res, 404, { error: 'not found' });
+    }
+
+    sendJson(res, 404, { error: 'not found' });
 };
 
 const handleChat = async (req: IncomingMessage, res: ServerResponse) => {
@@ -100,6 +152,13 @@ const handleChat = async (req: IncomingMessage, res: ServerResponse) => {
 const server = createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/api/chat') {
         handleChat(req, res).catch((err) => {
+            console.error(err);
+            res.writeHead(500).end('Internal error');
+        });
+        return;
+    }
+    if (req.url?.startsWith('/api/jobs')) {
+        handleJobs(req, res).catch((err) => {
             console.error(err);
             res.writeHead(500).end('Internal error');
         });

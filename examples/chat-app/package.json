@@ -12,6 +12,7 @@
     "dependencies": {
         "@varlabs/ai": "workspace:*",
         "@varlabs/ai.openai": "workspace:*",
+        "@varlabs/ai.state": "workspace:*",
         "@varlabs/ai.ui-core": "workspace:*",
         "@varlabs/ai.ui-react": "workspace:*",
         "react": "^19.2.8",

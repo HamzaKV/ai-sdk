@@ -49,9 +49,19 @@ body {
     margin-right: 0.5rem;
 }
 
+.job-id {
+    font-size: 0.85rem;
+    color: #666;
+}
+
 form {
     display: flex;
     gap: 0.5rem;
+}
+
+.resume-form {
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
 }
 
 input {
